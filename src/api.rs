@@ -127,7 +127,7 @@ impl GfroerliClient {
         let url = format!("{}/api/sensors", self.config.api_url);
         let response = self
             .http
-            .get(&url)
+            .head(&url)
             .bearer_auth(&self.config.api_key)
             .send()
             .await?;
