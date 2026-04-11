@@ -1,4 +1,8 @@
-use std::{fmt::Write, sync::Arc, time::{Duration, Instant}};
+use std::{
+    fmt::Write,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use serde::Deserialize;
 use tokio::sync::RwLock;
@@ -85,6 +89,27 @@ impl GfroerliClient {
             config,
             cache: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Validate the API key by making a test request to the API.
+    ///
+    /// Should be called once at startup to fail early if the key is invalid.
+    pub async fn validate_api_key(&self) -> anyhow::Result<()> {
+        let url = format!("{}/api/sensors", self.config.api_url);
+        let response = self
+            .http
+            .get(&url)
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await?;
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            anyhow::bail!(
+                "Gfrörli API key is invalid (401 Unauthorized). \
+                 Check the api_key in your config or GFROERLI_BOT__GFROERLI__API_KEY env var."
+            );
+        }
+        response.error_for_status()?;
+        Ok(())
     }
 
     /// Fetch all sensors, using the cache if still valid.

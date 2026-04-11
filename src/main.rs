@@ -42,6 +42,10 @@ async fn main() -> Result<()> {
     );
 
     let client = Arc::new(GfroerliClient::new(gfroerli_config));
+    client
+        .validate_api_key()
+        .await
+        .context("Gfrörli API key validation failed")?;
     let handler = GfroerliHandler::new(client);
 
     BotServer::new(bot_config, handler)?.run().await?;
