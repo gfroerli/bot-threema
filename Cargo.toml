@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["serde", "std"] }
 async-trait = "0.1"
 config = "0.14"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

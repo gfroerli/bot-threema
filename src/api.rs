@@ -4,7 +4,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde::Deserialize;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer};
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -24,7 +25,23 @@ pub struct Sensor {
     pub device_name: String,
     pub caption: Option<String>,
     pub latest_temperature: Option<f64>,
-    pub latest_measurement_at: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
+    pub latest_measurement_at: Option<DateTime<Utc>>,
+}
+
+/// Deserialize an optional Unix timestamp (seconds) into `Option<DateTime<Utc>>`.
+fn deserialize_optional_timestamp<'de, D>(
+    deserializer: D,
+) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<i64>::deserialize(deserializer)?
+        .map(|ts| {
+            DateTime::from_timestamp(ts, 0)
+                .ok_or_else(|| serde::de::Error::custom(format!("invalid timestamp: {ts}")))
+        })
+        .transpose()
 }
 
 impl Sensor {
@@ -49,7 +66,7 @@ impl Sensor {
     /// Format the current temperature reading.
     pub fn format_temperature(&self) -> String {
         let name = &self.device_name;
-        match (self.latest_temperature, &self.latest_measurement_at) {
+        match (self.latest_temperature, self.latest_measurement_at) {
             (Some(temp), Some(time)) => {
                 format!("{name}: {temp:.1}°C (measured at {time})")
             }

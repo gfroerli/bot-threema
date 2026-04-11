@@ -1,6 +1,10 @@
-# Devcontainer Generator
+# Gfrörli Threema Bot
 
 Read `README.md` for a general overview.
+
+## Resources
+
+- Gfrörli API documentation: https://github.com/gfroerli/api/blob/master/README.md
 
 ## Conventions
 
