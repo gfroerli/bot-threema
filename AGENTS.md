@@ -5,6 +5,7 @@ Read `README.md` for a general overview.
 ## Resources
 
 - Gfrörli API documentation: https://github.com/gfroerli/api/blob/master/README.md
+- To learn about Threema message formatting options, read: https://threema.com/en/faq/markup
 
 ## Conventions
 

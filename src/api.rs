@@ -64,7 +64,14 @@ fn format_relative_time(time: DateTime<Utc>) -> String {
 impl Sensor {
     /// Format sensor as a line in the sensor list.
     pub fn format_list_entry(&self) -> String {
-        format!("- {} ({})", self.device_name, self.id)
+        match self.latest_temperature {
+            Some(temp) => format!(
+                "{} \u{2013} {temp:.1}°C (#{self_id})",
+                self.device_name,
+                self_id = self.id
+            ),
+            None => format!("{} (#{self_id})", self.device_name, self_id = self.id),
+        }
     }
 
     /// Format the current temperature reading.
@@ -229,9 +236,18 @@ mod tests {
         use super::*;
 
         #[test]
-        fn basic() {
+        fn with_temperature() {
+            let sensor = make_sensor(13, "Bennau, Alp", Some(34.5), None);
+            assert_eq!(
+                sensor.format_list_entry(),
+                "Bennau, Alp \u{2013} 34.5°C (#13)"
+            );
+        }
+
+        #[test]
+        fn without_temperature() {
             let sensor = make_sensor(42, "Aare Bern", None, None);
-            insta::assert_snapshot!(sensor.format_list_entry());
+            assert_eq!(sensor.format_list_entry(), "Aare Bern (#42)");
         }
     }
 
