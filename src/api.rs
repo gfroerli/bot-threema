@@ -43,6 +43,24 @@ where
         .transpose()
 }
 
+/// Format a timestamp as a human-readable relative time string.
+fn format_relative_time(time: DateTime<Utc>) -> String {
+    let seconds = (Utc::now() - time).num_seconds().max(0);
+    let minutes = seconds / 60;
+    let hours = minutes / 60;
+    let days = hours / 24;
+
+    match () {
+        _ if seconds < 60 => "a few seconds ago".to_string(),
+        _ if minutes == 1 => "1 minute ago".to_string(),
+        _ if minutes < 60 => format!("{minutes} minutes ago"),
+        _ if hours == 1 => "1 hour ago".to_string(),
+        _ if hours < 24 => format!("{hours} hours ago"),
+        _ if days == 1 => "1 day ago".to_string(),
+        _ => format!("{days} days ago"),
+    }
+}
+
 impl Sensor {
     /// Format sensor as a line in the sensor list.
     pub fn format_list_entry(&self) -> String {
@@ -54,7 +72,8 @@ impl Sensor {
         let name = &self.device_name;
         match (self.latest_temperature, self.latest_measurement_at) {
             (Some(temp), Some(time)) => {
-                format!("{name}: {temp:.1}°C (measured at {time})")
+                let relative = format_relative_time(time);
+                format!("{name}: {temp:.1}°C ({relative})")
             }
             (Some(temp), None) => {
                 format!("{name}: {temp:.1}°C")
@@ -192,7 +211,8 @@ impl GfroerliClient {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, TimeZone, Utc};
+    use chrono::{DateTime, TimeDelta, TimeZone, Utc};
+    use rstest::rstest;
 
     use super::*;
 
@@ -220,9 +240,12 @@ mod tests {
 
         #[test]
         fn with_temp_and_time() {
-            let time = Utc.with_ymd_and_hms(2025, 7, 15, 14, 30, 0).unwrap();
+            let time = Utc::now() - TimeDelta::hours(2);
             let sensor = make_sensor(1, "Aare Bern", Some(18.3), Some(time));
-            insta::assert_snapshot!(sensor.format_temperature());
+            assert_eq!(
+                sensor.format_temperature(),
+                "Aare Bern: 18.3°C (2 hours ago)"
+            );
         }
 
         #[test]
@@ -241,6 +264,26 @@ mod tests {
         fn rounds_to_one_decimal() {
             let sensor = make_sensor(1, "Aare Bern", Some(18.347), None);
             insta::assert_snapshot!(sensor.format_temperature());
+        }
+    }
+
+    mod format_relative_time {
+        use super::*;
+
+        #[rstest]
+        #[case(0, "a few seconds ago")]
+        #[case(30, "a few seconds ago")]
+        #[case(60, "1 minute ago")]
+        #[case(300, "5 minutes ago")]
+        #[case(3540, "59 minutes ago")]
+        #[case(3600, "1 hour ago")]
+        #[case(10800, "3 hours ago")]
+        #[case(82800, "23 hours ago")]
+        #[case(86400, "1 day ago")]
+        #[case(604800, "7 days ago")]
+        fn relative_time(#[case] seconds_ago: i64, #[case] expected: &str) {
+            let time = Utc::now() - TimeDelta::seconds(seconds_ago);
+            assert_eq!(super::super::format_relative_time(time), expected);
         }
     }
 

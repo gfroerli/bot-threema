@@ -1,5 +1,0 @@
----
-source: src/api.rs
-expression: sensor.format_temperature()
----
-Aare Bern: 18.3°C (measured at 2025-07-15 14:30:00 UTC)
