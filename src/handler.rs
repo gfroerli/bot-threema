@@ -126,3 +126,25 @@ impl MessageHandler for GfroerliHandler {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod handle_info {
+        use super::*;
+
+        #[test]
+        fn returns_project_info() {
+            let action = GfroerliHandler::handle_info();
+            let Action::Respond(responses) = action else {
+                panic!("expected Action::Respond");
+            };
+            assert_eq!(responses.len(), 1);
+            let Response::Text(text) = &responses[0] else {
+                panic!("expected Response::Text");
+            };
+            insta::assert_snapshot!(text);
+        }
+    }
+}

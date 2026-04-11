@@ -189,3 +189,98 @@ impl GfroerliClient {
         Ok(output)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{DateTime, TimeZone, Utc};
+
+    use super::*;
+
+    fn make_sensor(id: u32, name: &str, temp: Option<f64>, time: Option<DateTime<Utc>>) -> Sensor {
+        Sensor {
+            id,
+            device_name: name.to_string(),
+            latest_temperature: temp,
+            latest_measurement_at: time,
+        }
+    }
+
+    mod format_list_entry {
+        use super::*;
+
+        #[test]
+        fn basic() {
+            let sensor = make_sensor(42, "Aare Bern", None, None);
+            insta::assert_snapshot!(sensor.format_list_entry());
+        }
+    }
+
+    mod format_temperature {
+        use super::*;
+
+        #[test]
+        fn with_temp_and_time() {
+            let time = Utc.with_ymd_and_hms(2025, 7, 15, 14, 30, 0).unwrap();
+            let sensor = make_sensor(1, "Aare Bern", Some(18.3), Some(time));
+            insta::assert_snapshot!(sensor.format_temperature());
+        }
+
+        #[test]
+        fn with_temp_no_time() {
+            let sensor = make_sensor(1, "Aare Bern", Some(18.3), None);
+            insta::assert_snapshot!(sensor.format_temperature());
+        }
+
+        #[test]
+        fn no_measurement() {
+            let sensor = make_sensor(1, "Aare Bern", None, None);
+            insta::assert_snapshot!(sensor.format_temperature());
+        }
+
+        #[test]
+        fn rounds_to_one_decimal() {
+            let sensor = make_sensor(1, "Aare Bern", Some(18.347), None);
+            insta::assert_snapshot!(sensor.format_temperature());
+        }
+    }
+
+    mod deserialize_sensor {
+        use super::*;
+
+        #[test]
+        fn valid_timestamp() {
+            let json = r#"{"id": 1, "device_name": "Aare Bern", "latest_temperature": 18.3, "latest_measurement_at": 1752589800}"#;
+            let sensor: Sensor = serde_json::from_str(json).unwrap();
+            assert_eq!(sensor.id, 1);
+            assert_eq!(sensor.device_name, "Aare Bern");
+            assert_eq!(sensor.latest_temperature, Some(18.3));
+            assert_eq!(
+                sensor.latest_measurement_at,
+                Some(Utc.with_ymd_and_hms(2025, 7, 15, 14, 30, 0).unwrap())
+            );
+        }
+
+        #[test]
+        fn null_timestamp() {
+            let json = r#"{"id": 1, "device_name": "Aare Bern", "latest_temperature": null, "latest_measurement_at": null}"#;
+            let sensor: Sensor = serde_json::from_str(json).unwrap();
+            assert_eq!(sensor.latest_temperature, None);
+            assert_eq!(sensor.latest_measurement_at, None);
+        }
+
+        #[test]
+        fn missing_optional_fields() {
+            let json = r#"{"id": 1, "device_name": "Aare Bern"}"#;
+            let sensor: Sensor = serde_json::from_str(json).unwrap();
+            assert_eq!(sensor.latest_temperature, None);
+            assert_eq!(sensor.latest_measurement_at, None);
+        }
+
+        #[test]
+        fn ignores_unknown_fields() {
+            let json = r#"{"id": 1, "device_name": "Aare Bern", "caption": "Some caption", "extra": true}"#;
+            let sensor: Sensor = serde_json::from_str(json).unwrap();
+            assert_eq!(sensor.id, 1);
+        }
+    }
+}
