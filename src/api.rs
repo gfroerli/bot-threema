@@ -23,7 +23,6 @@ const CACHE_TTL: Duration = Duration::from_secs(180);
 pub struct Sensor {
     pub id: u32,
     pub device_name: String,
-    pub caption: Option<String>,
     pub latest_temperature: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
     pub latest_measurement_at: Option<DateTime<Utc>>,
@@ -45,22 +44,9 @@ where
 }
 
 impl Sensor {
-    /// Return the caption with newlines collapsed to spaces, if present.
-    fn caption_without_newlines(&self) -> Option<String> {
-        self.caption
-            .as_deref()
-            .filter(|c| !c.is_empty())
-            .map(|c| c.split('\n').collect::<Vec<_>>().join(" "))
-    }
-
     /// Format sensor as a line in the sensor list.
     pub fn format_list_entry(&self) -> String {
-        match self.caption_without_newlines() {
-            Some(caption) => {
-                format!("#{}: {} ({})", self.id, self.device_name, caption)
-            }
-            _ => format!("#{}: {}", self.id, self.device_name),
-        }
+        format!("- {} ({})", self.device_name, self.id)
     }
 
     /// Format the current temperature reading.
@@ -188,10 +174,12 @@ impl GfroerliClient {
 
     /// Format the full sensor list as a text message.
     pub async fn format_sensor_list(&self) -> anyhow::Result<String> {
-        let sensors = self.sensors().await?;
+        let mut sensors = self.sensors().await?;
         if sensors.is_empty() {
             return Ok("No sensors found.".to_string());
         }
+
+        sensors.sort_by(|a, b| a.device_name.cmp(&b.device_name));
 
         let mut output = String::from("Available sensors:\n\n");
         for sensor in &sensors {
