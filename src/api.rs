@@ -13,7 +13,7 @@ use crate::config::GfroerliConfig;
 /// User-Agent header sent with API requests.
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 /// Timeout for individual API requests.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long cached sensor data remains valid.
 const CACHE_TTL: Duration = Duration::from_secs(180);
 

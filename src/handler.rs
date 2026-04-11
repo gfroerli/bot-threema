@@ -5,6 +5,7 @@ use threema_gateway_bot::{
     commands::{CommandStyle, Commands},
     server::handler::{
         Action, CommandType, HandlerError, HandlerResult, MessageContext, MessageHandler, Response,
+        TypingHandle,
     },
 };
 
@@ -21,7 +22,10 @@ impl GfroerliHandler {
     }
 
     /// Handle `/sensors`: list all available sensors.
-    async fn handle_sensors(&self) -> HandlerResult<Action> {
+    async fn handle_sensors(&self, typing: &TypingHandle) -> HandlerResult<Action> {
+        // Start sending typing indicator
+        typing.send();
+
         let text = self
             .client
             .format_sensor_list()
@@ -31,7 +35,7 @@ impl GfroerliHandler {
     }
 
     /// Handle `/temp <query>`: look up a sensor by name or ID and show its temperature.
-    async fn handle_temp(&self, args: &str) -> HandlerResult<Action> {
+    async fn handle_temp(&self, args: &str, typing: &TypingHandle) -> HandlerResult<Action> {
         // Validate query
         let query = args.trim();
         if query.is_empty() {
@@ -39,6 +43,9 @@ impl GfroerliHandler {
                 "Please specify a sensor name or ID.\n\nExample: /temp Aare\nExample: /temp 1\n\nUse /sensors to list all available sensors.",
             )]));
         }
+
+        // Start sending typing indicator
+        typing.send();
 
         // Find matching sensors
         let matches = self
@@ -92,7 +99,12 @@ impl MessageHandler for GfroerliHandler {
             .register("info", "About the Gfrörli project")
     }
 
-    async fn handle_text(&self, _ctx: &MessageContext, _text: &str) -> HandlerResult<Action> {
+    async fn handle_text(
+        &self,
+        _ctx: &MessageContext,
+        _text: &str,
+        _typing: &TypingHandle,
+    ) -> HandlerResult<Action> {
         Ok(Action::ShowHelp {
             prelude: Some("I didn't understand that. Here are the available commands:".into()),
         })
@@ -104,10 +116,11 @@ impl MessageHandler for GfroerliHandler {
         command: &str,
         args: &str,
         _command_type: CommandType,
+        typing: &TypingHandle,
     ) -> HandlerResult<Action> {
         match command {
-            "sensors" => self.handle_sensors().await,
-            "temp" => self.handle_temp(args).await,
+            "sensors" => self.handle_sensors(typing).await,
+            "temp" => self.handle_temp(args, typing).await,
             "info" => Ok(Self::handle_info()),
             _ => Ok(Action::ShowHelp { prelude: None }),
         }
