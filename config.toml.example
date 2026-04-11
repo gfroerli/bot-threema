@@ -1,0 +1,15 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+webhook_path = "/webhook"
+
+[threema]
+gateway_id = "*MYBOT01"
+# Can also be specified through GFROERLI_BOT__THREEMA__PRIVATE_KEY env var
+private_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+# Can also be specified through GFROERLI_BOT__THREEMA__API_SECRET env var
+api_secret = "your-api-secret"
+
+[gfroerli]
+api_url = "https://api.gfrör.li"
+api_key = "your-api-key"

@@ -1,5 +1,5 @@
 {
-  "name": "Gfrörli Bot Devcontainer",
+  "name": "Gfrörli Threema Bot Devcontainer",
   "$schema": "https://raw.githubusercontent.com/devcontainers/spec/refs/heads/main/schemas/devContainer.schema.json",
 
   "build": {
@@ -11,7 +11,7 @@
     // Basic security: Limited capabilities
     "--cap-drop=ALL",
     "--cap-add=CHOWN",
-    "--cap-add=SETGID",
+    "--cap-add=SETGID"
   ],
 
   // Run as non-root user
@@ -28,7 +28,7 @@
   "initializeCommand": {
     "create-claude-files": "mkdir -p ${HOME}/.config/claude/commands && for f in settings.json .credentials.json .claude.json; do [ -f ${HOME}/.config/claude/$f ] || echo '{}' > ${HOME}/.config/claude/$f; done && touch ${HOME}/.config/claude/CLAUDE.md",
     "create-opencode-config-dir": "mkdir -p ${HOME}/.config/opencode",
-    "create-opencode-auth-file": "mkdir -p ${HOME}/.local/share/opencode && touch ${HOME}/.local/share/opencode/auth.json",
+    "create-opencode-auth-file": "mkdir -p ${HOME}/.local/share/opencode && touch ${HOME}/.local/share/opencode/auth.json"
   },
 
   // Mounts
@@ -48,7 +48,7 @@
     // OpenCode data storage (project-specific named volume for sessions, messages, etc.)
     "source=devcontainer--${localWorkspaceFolderBasename}--opencode-data,target=/home/dev/.local/share/opencode,type=volume",
     // OpenCode credentials (shared from host, overlays on top of the volume)
-    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/dev/.local/share/opencode/auth.json,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/dev/.local/share/opencode/auth.json,type=bind,consistency=cached"
   ],
 
   // Container environment variables
@@ -56,7 +56,7 @@
     // Bash history
     "HISTFILE": "/home/dev/.config-persistent/.bash_history",
     // Claude Code
-    "CLAUDE_CONFIG_DIR": "/home/dev/.config/claude/",
+    "CLAUDE_CONFIG_DIR": "/home/dev/.config/claude/"
   },
 
   // Features to install
@@ -67,7 +67,7 @@
     "./features/opencode": {
       "version": "latest",
       "binaryType": "glibc"
-    },
+    }
   },
 
   // Forward ports
@@ -89,7 +89,7 @@
         "files.insertFinalNewline": true,
         "editor.formatOnSave": true,
         // Extensions
-        "rewrap.wrappingColumn": 110,
+        "rewrap.wrappingColumn": 90,
         // JSON
         "[jsonc]": {
           "json.format.keepLines": true
@@ -106,9 +106,8 @@
         "esbenp.prettier-vscode",
         // Rust
         "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml",
+        "tamasfe.even-better-toml"
       ]
     }
-  },
-
+  }
 }
