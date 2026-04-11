@@ -7,7 +7,7 @@ use std::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer};
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, trace, warn};
 
 use crate::config::GfroerliConfig;
 
@@ -17,6 +17,17 @@ const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VE
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long cached sensor data remains valid.
 const CACHE_TTL: Duration = Duration::from_secs(180);
+/// Log API response times at warn level if they exceed this threshold.
+const SLOW_REQUEST_THRESHOLD: Duration = Duration::from_secs(2);
+
+/// Log the duration of an API request, at warn level if slow.
+fn log_request_duration(endpoint: &str, elapsed: Duration) {
+    if elapsed >= SLOW_REQUEST_THRESHOLD {
+        warn!("{endpoint} completed in {elapsed:.1?}");
+    } else {
+        trace!("{endpoint} completed in {elapsed:.1?}");
+    }
+}
 
 /// A sensor as returned by the Gfrörli API.
 #[derive(Debug, Clone, Deserialize)]
@@ -125,12 +136,14 @@ impl GfroerliClient {
     /// Should be called once at startup to fail early if the key is invalid.
     pub async fn validate_api_key(&self) -> anyhow::Result<()> {
         let url = format!("{}/api/sensors", self.config.api_url);
+        let start = Instant::now();
         let response = self
             .http
             .head(&url)
             .bearer_auth(&self.config.api_key)
             .send()
             .await?;
+        log_request_duration("HEAD /api/sensors", start.elapsed());
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             anyhow::bail!(
                 "Gfrörli API key is invalid (401 Unauthorized). \
@@ -156,6 +169,7 @@ impl GfroerliClient {
         // Cache miss or expired — fetch from API
         debug!("Fetching sensors from API");
         let url = format!("{}/api/mobile_app/sensors", self.config.api_url);
+        let start = Instant::now();
         let sensors: Vec<Sensor> = self
             .http
             .get(&url)
@@ -165,6 +179,7 @@ impl GfroerliClient {
             .error_for_status()?
             .json()
             .await?;
+        log_request_duration("GET /api/mobile_app/sensors", start.elapsed());
 
         // Update cache
         {
