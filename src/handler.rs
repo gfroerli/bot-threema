@@ -312,8 +312,14 @@ impl GfroerliHandler {
             )
         }));
         let text = format_stats_text(&sensor, stats_24h, stats_30d);
-        let png = chart::render_sensor_charts(&sensor.device_name, &hourly_chart, &daily_chart)
-            .map_err(HandlerError::from)?;
+        let rendered_at = Utc::now().with_timezone(&DISPLAY_TIMEZONE);
+        let png = chart::render_sensor_charts(
+            &sensor.device_name,
+            rendered_at,
+            &hourly_chart,
+            &daily_chart,
+        )
+        .map_err(HandlerError::from)?;
 
         Ok(Action::Respond(vec![Response::image(
             png,

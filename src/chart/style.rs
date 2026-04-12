@@ -34,6 +34,8 @@ pub(super) const RENDER_HEIGHT: u32 = HEIGHT * RENDER_SCALE;
 
 /// Font size of the top-level sensor name title.
 pub(super) const TITLE_FONT_SIZE: u32 = 42 * RENDER_SCALE;
+/// Font size of the subtitle (rendered-at timestamp) below the title.
+pub(super) const SUBTITLE_FONT_SIZE: u32 = 22 * RENDER_SCALE;
 /// Font size of each chart's caption (e.g. "Last 24 hours").
 pub(super) const CAPTION_FONT_SIZE: u32 = 26 * RENDER_SCALE;
 /// Font size of axis tick labels.
@@ -43,7 +45,7 @@ pub(super) const LINE_WIDTH: u32 = 3 * RENDER_SCALE;
 /// Blank padding above the title.
 pub(super) const TITLE_TOP_PADDING: i32 = 24 * RENDER_SCALE as i32;
 /// Height of the title area at the top of the chart.
-pub(super) const TITLE_AREA_HEIGHT: i32 = 80 * RENDER_SCALE as i32;
+pub(super) const TITLE_AREA_HEIGHT: i32 = 110 * RENDER_SCALE as i32;
 /// Outer margin around each chart panel.
 pub(super) const CHART_MARGIN: i32 = 15 * RENDER_SCALE as i32;
 /// Height of the x-axis label area below each chart.

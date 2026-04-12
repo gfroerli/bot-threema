@@ -22,14 +22,16 @@ use super::{
     style::{
         CAPTION_FONT_SIZE, CHART_MARGIN, FOOTER_AREA_HEIGHT, FOOTER_FONT_SIZE, FOOTER_ICON_GAP,
         FOOTER_PADDING_RIGHT, HEIGHT, ICON_BYTES, LABEL_FONT_SIZE, LINE_WIDTH, RENDER_HEIGHT,
-        RENDER_SCALE, RENDER_WIDTH, TITLE_AREA_HEIGHT, TITLE_FONT_SIZE, TITLE_TOP_PADDING, WIDTH,
-        X_LABEL_AREA, Y_LABEL_AREA, avg_color, band_color, ensure_fonts_registered,
+        RENDER_SCALE, RENDER_WIDTH, SUBTITLE_FONT_SIZE, TITLE_AREA_HEIGHT, TITLE_FONT_SIZE,
+        TITLE_TOP_PADDING, WIDTH, X_LABEL_AREA, Y_LABEL_AREA, avg_color, band_color,
+        ensure_fonts_registered,
     },
 };
 
 /// Render sensor detail charts as a PNG image and return the encoded bytes.
 pub fn render_sensor_charts(
     title: &str,
+    rendered_at: DateTime<Tz>,
     hourly: &[HourlyPoint],
     daily: &[DailyPoint],
 ) -> Result<Vec<u8>> {
@@ -54,12 +56,32 @@ pub fn render_sensor_charts(
         // Top padding + title + two stacked chart areas + footer
         let (_top_pad, below_pad) = root.split_vertically(TITLE_TOP_PADDING);
         let (title_area, body_area) = below_pad.split_vertically(TITLE_AREA_HEIGHT);
+        let (title_w, title_h) = title_area.dim_in_pixel();
+        let title_center_x = title_w as i32 / 2;
+        let title_line_gap =
+            TITLE_FONT_SIZE as i32 + SUBTITLE_FONT_SIZE as i32 + 4 * RENDER_SCALE as i32;
+        let title_line_y = title_h as i32 / 2 - title_line_gap / 2 + TITLE_FONT_SIZE as i32 / 2;
+        let subtitle_line_y =
+            title_h as i32 / 2 + title_line_gap / 2 - SUBTITLE_FONT_SIZE as i32 / 2;
+        let title_anchor = Pos::new(HPos::Center, VPos::Center);
         title_area
-            .titled(
-                title,
-                ("sans-serif", TITLE_FONT_SIZE, FontStyle::Bold).into_font(),
-            )
-            .context("failed to draw title")?;
+            .draw(&Text::new(
+                title.to_string(),
+                (title_center_x, title_line_y),
+                TextStyle::from(("sans-serif", TITLE_FONT_SIZE, FontStyle::Bold).into_font())
+                    .pos(title_anchor),
+            ))
+            .map_err(|e| anyhow::anyhow!("failed to draw title: {e}"))?;
+        let subtitle = rendered_at.format("%d.%m.%Y %H:%M").to_string();
+        title_area
+            .draw(&Text::new(
+                subtitle,
+                (title_center_x, subtitle_line_y),
+                TextStyle::from(("sans-serif", SUBTITLE_FONT_SIZE).into_font())
+                    .color(&plotters::style::BLACK.mix(0.6))
+                    .pos(title_anchor),
+            ))
+            .map_err(|e| anyhow::anyhow!("failed to draw subtitle: {e}"))?;
 
         let body_height = body_area.dim_in_pixel().1 as i32;
         let (charts_area, footer_area) =
@@ -312,6 +334,12 @@ mod tests {
     mod render_sensor_charts {
         use super::*;
 
+        fn sample_rendered_at() -> DateTime<Tz> {
+            DISPLAY_TIMEZONE
+                .with_ymd_and_hms(2025, 7, 15, 14, 30, 0)
+                .unwrap()
+        }
+
         fn sample_hourly() -> Vec<HourlyPoint> {
             let base = DISPLAY_TIMEZONE
                 .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
@@ -348,7 +376,13 @@ mod tests {
 
         #[test]
         fn produces_png_bytes() {
-            let png = render_sensor_charts("Aare Bern", &sample_hourly(), &sample_daily()).unwrap();
+            let png = render_sensor_charts(
+                "Aare Bern",
+                sample_rendered_at(),
+                &sample_hourly(),
+                &sample_daily(),
+            )
+            .unwrap();
             assert!(
                 png.len() > 1024,
                 "PNG suspiciously small: {} bytes",
@@ -359,7 +393,7 @@ mod tests {
 
         #[test]
         fn handles_empty_series() {
-            let png = render_sensor_charts("Empty", &[], &[]).unwrap();
+            let png = render_sensor_charts("Empty", sample_rendered_at(), &[], &[]).unwrap();
             assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
         }
 
@@ -380,7 +414,7 @@ mod tests {
                 max: 18.0,
                 avg: 18.0,
             }];
-            let png = render_sensor_charts("Flat", &hourly, &daily).unwrap();
+            let png = render_sensor_charts("Flat", sample_rendered_at(), &hourly, &daily).unwrap();
             assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
         }
     }

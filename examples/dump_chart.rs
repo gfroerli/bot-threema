@@ -59,7 +59,15 @@ fn noise(i: usize, seed: u64) -> f64 {
 }
 
 fn render(out: &Path, scenario: &Scenario) -> Result<()> {
-    let png = chart::render_sensor_charts(scenario.title, &scenario.hourly, &scenario.daily)?;
+    let rendered_at = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 7, 15, 14, 30, 0)
+        .unwrap();
+    let png = chart::render_sensor_charts(
+        scenario.title,
+        rendered_at,
+        &scenario.hourly,
+        &scenario.daily,
+    )?;
     std::fs::write(out, &png).with_context(|| format!("failed to write {}", out.display()))?;
     println!("Wrote {} ({} bytes)", out.display(), png.len());
     Ok(())
