@@ -13,11 +13,12 @@ use plotters::{
     chart::ChartBuilder,
     coord::{Shift, ranged1d::AsRangedCoord},
     drawing::{DrawingArea, IntoDrawingArea},
-    element::Polygon,
+    element::{Polygon, Text},
     series::LineSeries,
     style::{
         AsRelative, Color, FontStyle, IntoFont, RGBAColor, RGBColor, ShapeStyle, TextStyle, WHITE,
         register_font,
+        text_anchor::{HPos, Pos, VPos},
     },
 };
 
@@ -53,14 +54,22 @@ const CAPTION_FONT_SIZE: u32 = 26 * RENDER_SCALE;
 const LABEL_FONT_SIZE: u32 = 20 * RENDER_SCALE;
 /// Stroke width of the average temperature line.
 const LINE_WIDTH: u32 = 3 * RENDER_SCALE;
+/// Blank padding above the title.
+const TITLE_TOP_PADDING: i32 = 24 * RENDER_SCALE as i32;
 /// Height of the title area at the top of the chart.
-const TITLE_AREA_HEIGHT: i32 = 70 * RENDER_SCALE as i32;
+const TITLE_AREA_HEIGHT: i32 = 80 * RENDER_SCALE as i32;
 /// Outer margin around each chart panel.
 const CHART_MARGIN: i32 = 15 * RENDER_SCALE as i32;
 /// Height of the x-axis label area below each chart.
 const X_LABEL_AREA: i32 = 50 * RENDER_SCALE as i32;
 /// Width of the y-axis label area to the left of each chart.
 const Y_LABEL_AREA: i32 = 80 * RENDER_SCALE as i32;
+/// Height reserved at the bottom of the image for the footer.
+const FOOTER_AREA_HEIGHT: i32 = 80 * RENDER_SCALE as i32;
+/// Right-side padding of the footer text.
+const FOOTER_PADDING_RIGHT: i32 = 24 * RENDER_SCALE as i32;
+/// Font size of the footer text.
+const FOOTER_FONT_SIZE: u32 = 18 * RENDER_SCALE;
 
 /// Ensure fonts are registered exactly once for the plotters `ab_glyph` backend.
 static REGISTER_FONTS: Once = Once::new();
@@ -104,14 +113,19 @@ pub fn render_sensor_charts(
         let root = backend.into_drawing_area();
         root.fill(&WHITE).context("failed to fill background")?;
 
-        // Title area + two stacked chart areas
-        let (title_area, charts_area) = root.split_vertically(TITLE_AREA_HEIGHT);
+        // Top padding + title + two stacked chart areas + footer
+        let (_top_pad, below_pad) = root.split_vertically(TITLE_TOP_PADDING);
+        let (title_area, body_area) = below_pad.split_vertically(TITLE_AREA_HEIGHT);
         title_area
             .titled(
                 title,
                 ("sans-serif", TITLE_FONT_SIZE, FontStyle::Bold).into_font(),
             )
             .context("failed to draw title")?;
+
+        let body_height = body_area.dim_in_pixel().1 as i32;
+        let (charts_area, footer_area) =
+            body_area.split_vertically(body_height - FOOTER_AREA_HEIGHT);
         let (top, bottom) = charts_area.split_vertically((50).percent());
 
         draw_temperature_chart(&top, "Last 24 hours", hourly, |dt: &DateTime<Utc>| {
@@ -120,6 +134,8 @@ pub fn render_sensor_charts(
         draw_temperature_chart(&bottom, "Last 30 days", daily, |d: &NaiveDate| {
             d.format("%b %d").to_string()
         })?;
+
+        draw_footer(&footer_area)?;
 
         root.present().context("failed to present drawing")?;
     }
@@ -257,13 +273,48 @@ where
         )
         .map_err(|e| anyhow::anyhow!("failed to draw empty caption: {e}"))?;
     let (w, h) = body.dim_in_pixel();
-    body.draw(&plotters::element::Text::new(
+    body.draw(&Text::new(
         "no data".to_string(),
         (w as i32 / 2 - 40 * RENDER_SCALE as i32, h as i32 / 2),
         TextStyle::from(("sans-serif", LABEL_FONT_SIZE).into_font())
             .color(&plotters::style::BLACK.mix(0.6)),
     ))
     .map_err(|e| anyhow::anyhow!("failed to draw empty label: {e}"))?;
+    Ok(())
+}
+
+/// Draw the footer text (project name + URL) right-aligned at the bottom.
+fn draw_footer<DB>(area: &DrawingArea<DB, Shift>) -> Result<()>
+where
+    DB: DrawingBackend,
+    DB::ErrorType: 'static,
+{
+    let (w, h) = area.dim_in_pixel();
+    let right = w as i32 - FOOTER_PADDING_RIGHT;
+    let line_gap = (FOOTER_FONT_SIZE as f32 * 1.3) as i32;
+    let center_y = h as i32 / 2;
+    let anchor = Pos::new(HPos::Right, VPos::Center);
+    let name_color = plotters::style::BLACK.mix(0.75);
+    let url_color = plotters::style::BLACK.mix(0.55);
+
+    area.draw(&Text::new(
+        "Gfrörli – Swiss Water Temperatures".to_string(),
+        (right, center_y - line_gap / 2),
+        TextStyle::from(("sans-serif", FOOTER_FONT_SIZE, FontStyle::Bold).into_font())
+            .color(&name_color)
+            .pos(anchor),
+    ))
+    .map_err(|e| anyhow::anyhow!("failed to draw footer name: {e}"))?;
+
+    area.draw(&Text::new(
+        "https://gfrör.li/".to_string(),
+        (right, center_y + line_gap / 2),
+        TextStyle::from(("sans-serif", FOOTER_FONT_SIZE).into_font())
+            .color(&url_color)
+            .pos(anchor),
+    ))
+    .map_err(|e| anyhow::anyhow!("failed to draw footer url: {e}"))?;
+
     Ok(())
 }
 
