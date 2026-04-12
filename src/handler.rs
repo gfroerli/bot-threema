@@ -9,7 +9,26 @@ use threema_gateway_bot::{
     },
 };
 
-use crate::api::GfroerliClient;
+use crate::api::{GfroerliClient, Sensor};
+
+/// Build the response text for a `/temp` query given the matching sensors.
+fn format_temp_response(query: &str, matches: &[Sensor]) -> String {
+    match matches.len() {
+        0 => format!(
+            "No sensor found matching \"{query}\".\n\nUse /sensors to list all available sensors."
+        ),
+        1 => matches[0].format_temperature(),
+        _ => {
+            let mut msg = format!("Multiple sensors match \"{query}\":\n\n");
+            for sensor in matches {
+                msg.push_str(&sensor.format_list_entry());
+                msg.push('\n');
+            }
+            msg.push_str("\nPlease be more specific or use the sensor ID (e.g. /temp 1).");
+            msg
+        }
+    }
+}
 
 /// Threema bot handler for the Gfrörli water temperature service.
 pub struct GfroerliHandler {
@@ -54,23 +73,9 @@ impl GfroerliHandler {
             .await
             .map_err(HandlerError::from)?;
 
-        // Respond
-        let text = match matches.len() {
-            0 => format!(
-                "No sensor found matching \"{query}\".\n\nUse /sensors to list all available sensors."
-            ),
-            1 => matches[0].format_temperature(),
-            _ => {
-                let mut msg = format!("Multiple sensors match \"{query}\":\n\n");
-                for sensor in &matches {
-                    msg.push_str(&sensor.format_list_entry());
-                    msg.push('\n');
-                }
-                msg.push_str("\nPlease be more specific or use the sensor ID (e.g. /temp 1).");
-                msg
-            }
-        };
-        Ok(Action::Respond(vec![Response::text(text)]))
+        Ok(Action::Respond(vec![Response::text(format_temp_response(
+            query, &matches,
+        ))]))
     }
 
     /// Handle `/info`: show information about the Gfrörli project.
@@ -145,6 +150,42 @@ mod tests {
                 panic!("expected Response::Text");
             };
             insta::assert_snapshot!(text);
+        }
+    }
+
+    mod format_temp_response {
+        use super::*;
+
+        fn make_sensor(id: u32, name: &str, temp: Option<f64>) -> Sensor {
+            Sensor {
+                id,
+                device_name: name.to_string(),
+                latest_temperature: temp,
+                latest_measurement_at: None,
+            }
+        }
+
+        #[test]
+        fn no_match() {
+            let response = format_temp_response("nonexistent", &[]);
+            insta::assert_snapshot!(response);
+        }
+
+        #[test]
+        fn single_match() {
+            let sensors = vec![make_sensor(1, "Aare Bern", Some(18.3))];
+            let response = format_temp_response("Aare", &sensors);
+            insta::assert_snapshot!(response);
+        }
+
+        #[test]
+        fn multiple_matches() {
+            let sensors = vec![
+                make_sensor(1, "Aare Bern", Some(18.3)),
+                make_sensor(3, "Aare Thun", Some(17.1)),
+            ];
+            let response = format_temp_response("Aare", &sensors);
+            insta::assert_snapshot!(response);
         }
     }
 }

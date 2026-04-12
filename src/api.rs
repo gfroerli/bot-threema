@@ -7,7 +7,7 @@ use std::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer};
 use tokio::sync::RwLock;
-use tracing::{debug, trace, warn};
+use tracing::{debug, warn};
 
 use crate::config::GfroerliConfig;
 
@@ -52,6 +52,37 @@ where
                 .ok_or_else(|| serde::de::Error::custom(format!("invalid timestamp: {ts}")))
         })
         .transpose()
+}
+
+/// Filter sensors by query (ID or case-insensitive name substring).
+fn filter_sensors(sensors: Vec<Sensor>, query: &str) -> Vec<Sensor> {
+    // Try parsing as sensor ID first
+    if let Ok(id) = query.parse::<u32>() {
+        return sensors.into_iter().filter(|s| s.id == id).collect();
+    }
+
+    // Case-insensitive substring match against device_name
+    let query_lower = query.to_lowercase();
+    sensors
+        .into_iter()
+        .filter(|s| s.device_name.to_lowercase().contains(&query_lower))
+        .collect()
+}
+
+/// Format a list of sensors as a human-readable text message.
+fn format_sensor_list_text(mut sensors: Vec<Sensor>) -> String {
+    if sensors.is_empty() {
+        return "No sensors found.".to_string();
+    }
+
+    sensors.sort_by(|a, b| a.device_name.cmp(&b.device_name));
+
+    let mut output = String::from("Available sensors:\n\n");
+    for sensor in &sensors {
+        writeln!(output, "{}", sensor.format_list_entry()).unwrap();
+    }
+    output.truncate(output.trim_end().len());
+    output
 }
 
 /// Format a timestamp as a human-readable relative time string.
@@ -201,38 +232,13 @@ impl GfroerliClient {
     /// Find sensors matching a query (by ID or name substring).
     pub async fn find_sensors(&self, query: &str) -> anyhow::Result<Vec<Sensor>> {
         let sensors = self.sensors().await?;
-
-        // Try parsing as sensor ID first
-        if let Ok(id) = query.parse::<u32>() {
-            let matches: Vec<Sensor> = sensors.into_iter().filter(|s| s.id == id).collect();
-            return Ok(matches);
-        }
-
-        // Case-insensitive substring match against device_name
-        let query_lower = query.to_lowercase();
-        let matches: Vec<Sensor> = sensors
-            .into_iter()
-            .filter(|s| s.device_name.to_lowercase().contains(&query_lower))
-            .collect();
-
-        Ok(matches)
+        Ok(filter_sensors(sensors, query))
     }
 
     /// Format the full sensor list as a text message.
     pub async fn format_sensor_list(&self) -> anyhow::Result<String> {
-        let mut sensors = self.sensors().await?;
-        if sensors.is_empty() {
-            return Ok("No sensors found.".to_string());
-        }
-
-        sensors.sort_by(|a, b| a.device_name.cmp(&b.device_name));
-
-        let mut output = String::from("Available sensors:\n\n");
-        for sensor in &sensors {
-            writeln!(output, "{}", sensor.format_list_entry()).unwrap();
-        }
-        output.truncate(output.trim_end().len());
-        Ok(output)
+        let sensors = self.sensors().await?;
+        Ok(format_sensor_list_text(sensors))
     }
 }
 
@@ -319,7 +325,7 @@ mod tests {
         #[case(604800, "7 days ago")]
         fn relative_time(#[case] seconds_ago: i64, #[case] expected: &str) {
             let time = Utc::now() - TimeDelta::seconds(seconds_ago);
-            assert_eq!(super::super::format_relative_time(time), expected);
+            assert_eq!(format_relative_time(time), expected);
         }
     }
 
@@ -360,6 +366,84 @@ mod tests {
             let json = r#"{"id": 1, "device_name": "Aare Bern", "caption": "Some caption", "extra": true}"#;
             let sensor: Sensor = serde_json::from_str(json).unwrap();
             assert_eq!(sensor.id, 1);
+        }
+    }
+
+    mod filter_sensors {
+        use super::*;
+
+        fn sample_sensors() -> Vec<Sensor> {
+            vec![
+                make_sensor(1, "Aare Bern", None, None),
+                make_sensor(2, "Rhein Basel", None, None),
+                make_sensor(3, "Aare Thun", None, None),
+                make_sensor(42, "Limmat Zürich", None, None),
+            ]
+        }
+
+        #[test]
+        fn by_id() {
+            let matches = filter_sensors(sample_sensors(), "2");
+            assert_eq!(matches.len(), 1);
+            assert_eq!(matches[0].id, 2);
+        }
+
+        #[test]
+        fn by_id_no_match() {
+            let matches = filter_sensors(sample_sensors(), "999");
+            assert!(matches.is_empty());
+        }
+
+        #[test]
+        fn by_name_substring_case_insensitive() {
+            let matches = filter_sensors(sample_sensors(), "aare");
+            assert_eq!(matches.len(), 2);
+            assert_eq!(matches[0].device_name, "Aare Bern");
+            assert_eq!(matches[1].device_name, "Aare Thun");
+        }
+
+        #[test]
+        fn by_name_no_match() {
+            let matches = filter_sensors(sample_sensors(), "Nothing");
+            assert!(matches.is_empty());
+        }
+
+        #[test]
+        fn by_name_single_match() {
+            let matches = filter_sensors(sample_sensors(), "Rhein");
+            assert_eq!(matches.len(), 1);
+            assert_eq!(matches[0].device_name, "Rhein Basel");
+        }
+
+        #[test]
+        fn prefers_id_over_name() {
+            // Query "42" matches ID 42 exactly, not "Sensor 42"
+            let sensors = vec![
+                make_sensor(42, "Aare Bern", None, None),
+                make_sensor(5, "Sensor 42 Test", None, None),
+            ];
+            let matches = filter_sensors(sensors, "42");
+            assert_eq!(matches.len(), 1);
+            assert_eq!(matches[0].id, 42);
+        }
+    }
+
+    mod format_sensor_list_text {
+        use super::*;
+
+        #[test]
+        fn with_sensors_sorted_alphabetically() {
+            let sensors = vec![
+                make_sensor(1, "Rhein Basel", None, None),
+                make_sensor(2, "Aare Bern", None, None),
+                make_sensor(3, "Limmat Zürich", None, None),
+            ];
+            insta::assert_snapshot!(format_sensor_list_text(sensors));
+        }
+
+        #[test]
+        fn empty() {
+            assert_eq!(format_sensor_list_text(vec![]), "No sensors found.");
         }
     }
 }

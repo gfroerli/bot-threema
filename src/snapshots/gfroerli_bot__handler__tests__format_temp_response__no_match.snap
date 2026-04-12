@@ -1,0 +1,7 @@
+---
+source: src/handler.rs
+expression: response
+---
+No sensor found matching "nonexistent".
+
+Use /sensors to list all available sensors.

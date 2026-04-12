@@ -1,0 +1,9 @@
+---
+source: src/api.rs
+expression: format_sensor_list_text(sensors)
+---
+Available sensors:
+
+Aare Bern (#2)
+Limmat Zürich (#3)
+Rhein Basel (#1)
