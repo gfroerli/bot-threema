@@ -1,0 +1,10 @@
+---
+source: src/handler.rs
+expression: err
+---
+Multiple sensors match "Aare":
+
+Aare Bern – 18.3°C (#1)
+Aare Thun – 17.1°C (#3)
+
+Please be more specific or use the sensor ID (e.g. /temp 1).

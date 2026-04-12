@@ -8,6 +8,8 @@ anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 async-trait = "0.1"
 config = "0.14"
+image = { version = "0.25", default-features = false, features = ["png"] }
+plotters = { version = "0.3", default-features = false, features = ["ab_glyph", "area_series", "bitmap_backend", "bitmap_encoder", "chrono", "line_series"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }

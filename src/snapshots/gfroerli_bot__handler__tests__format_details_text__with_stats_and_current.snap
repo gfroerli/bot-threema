@@ -1,0 +1,11 @@
+---
+source: src/handler.rs
+expression: "format_details_text(&sensor, stats)"
+---
+Aare Bern (#1)
+Current: 18.3°C
+
+Last 30 days:
+  min  14.1°C
+  max  22.4°C
+  avg  18.7°C

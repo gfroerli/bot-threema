@@ -1,15 +1,10 @@
-mod api;
-mod config;
-mod handler;
-
 use std::{env, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
+use gfroerli_bot::{api::GfroerliClient, config::AppConfig, handler::GfroerliHandler};
 use threema_gateway_bot::server::BotServer;
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt};
-
-use crate::{api::GfroerliClient, config::AppConfig, handler::GfroerliHandler};
 
 /// Parse the optional `--config <path>` flag from command-line arguments.
 fn parse_args() -> Result<Option<PathBuf>> {

@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
@@ -52,6 +52,25 @@ where
                 .ok_or_else(|| serde::de::Error::custom(format!("invalid timestamp: {ts}")))
         })
         .transpose()
+}
+
+/// A daily temperature aggregate as returned by the Gfrörli API.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DailyTemperature {
+    pub aggregation_date: NaiveDate,
+    pub minimum_temperature: f64,
+    pub maximum_temperature: f64,
+    pub average_temperature: f64,
+}
+
+/// An hourly temperature aggregate as returned by the Gfrörli API.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HourlyTemperature {
+    pub aggregation_date: NaiveDate,
+    pub aggregation_hour: u8,
+    pub minimum_temperature: f64,
+    pub maximum_temperature: f64,
+    pub average_temperature: f64,
 }
 
 /// Filter sensors by query (ID or case-insensitive name substring).
@@ -235,6 +254,68 @@ impl GfroerliClient {
         Ok(filter_sensors(sensors, query))
     }
 
+    /// Fetch daily temperature aggregates for a sensor over a date range.
+    pub async fn daily_temperatures(
+        &self,
+        sensor_id: u32,
+        from: NaiveDate,
+        to: NaiveDate,
+        limit: u32,
+    ) -> anyhow::Result<Vec<DailyTemperature>> {
+        let endpoint = format!("/api/mobile_app/sensors/{sensor_id}/daily_temperatures");
+        let url = format!("{}{endpoint}", self.config.api_url);
+
+        let start = Instant::now();
+        let result: Vec<DailyTemperature> = self
+            .http
+            .get(&url)
+            .bearer_auth(&self.config.api_key)
+            .query(&[
+                ("from", from.to_string()),
+                ("to", to.to_string()),
+                ("limit", limit.to_string()),
+            ])
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        log_request_duration(&format!("GET {endpoint}"), start.elapsed());
+
+        Ok(result)
+    }
+
+    /// Fetch hourly temperature aggregates for a sensor over a date range.
+    pub async fn hourly_temperatures(
+        &self,
+        sensor_id: u32,
+        from: NaiveDate,
+        to: NaiveDate,
+        limit: u32,
+    ) -> anyhow::Result<Vec<HourlyTemperature>> {
+        let endpoint = format!("/api/mobile_app/sensors/{sensor_id}/hourly_temperatures");
+        let url = format!("{}{endpoint}", self.config.api_url);
+
+        let start = Instant::now();
+        let result: Vec<HourlyTemperature> = self
+            .http
+            .get(&url)
+            .bearer_auth(&self.config.api_key)
+            .query(&[
+                ("from", from.to_string()),
+                ("to", to.to_string()),
+                ("limit", limit.to_string()),
+            ])
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        log_request_duration(&format!("GET {endpoint}"), start.elapsed());
+
+        Ok(result)
+    }
+
     /// Format the full sensor list as a text message.
     pub async fn format_sensor_list(&self) -> anyhow::Result<String> {
         let sensors = self.sensors().await?;
@@ -366,6 +447,46 @@ mod tests {
             let json = r#"{"id": 1, "device_name": "Aare Bern", "caption": "Some caption", "extra": true}"#;
             let sensor: Sensor = serde_json::from_str(json).unwrap();
             assert_eq!(sensor.id, 1);
+        }
+    }
+
+    mod deserialize_daily_temperature {
+        use super::*;
+
+        #[test]
+        fn valid() {
+            let json = r#"{"aggregation_date": "2025-07-15", "minimum_temperature": 17.2, "maximum_temperature": 21.5, "average_temperature": 19.1}"#;
+            let daily: DailyTemperature = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                daily.aggregation_date,
+                NaiveDate::from_ymd_opt(2025, 7, 15).unwrap()
+            );
+            assert_eq!(daily.minimum_temperature, 17.2);
+            assert_eq!(daily.maximum_temperature, 21.5);
+            assert_eq!(daily.average_temperature, 19.1);
+        }
+
+        #[test]
+        fn ignores_unknown_fields() {
+            let json = r#"{"aggregation_date": "2025-07-15", "minimum_temperature": 17.2, "maximum_temperature": 21.5, "average_temperature": 19.1, "extra": "ignored"}"#;
+            let daily: DailyTemperature = serde_json::from_str(json).unwrap();
+            assert_eq!(daily.average_temperature, 19.1);
+        }
+    }
+
+    mod deserialize_hourly_temperature {
+        use super::*;
+
+        #[test]
+        fn valid() {
+            let json = r#"{"aggregation_date": "2025-07-15", "aggregation_hour": 14, "minimum_temperature": 17.2, "maximum_temperature": 21.5, "average_temperature": 19.1}"#;
+            let hourly: HourlyTemperature = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                hourly.aggregation_date,
+                NaiveDate::from_ymd_opt(2025, 7, 15).unwrap()
+            );
+            assert_eq!(hourly.aggregation_hour, 14);
+            assert_eq!(hourly.average_temperature, 19.1);
         }
     }
 

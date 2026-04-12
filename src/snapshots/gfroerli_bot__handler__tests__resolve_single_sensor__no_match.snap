@@ -1,6 +1,6 @@
 ---
 source: src/handler.rs
-expression: response
+expression: err
 ---
 No sensor found matching "nonexistent".
 
