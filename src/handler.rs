@@ -16,59 +16,72 @@ use crate::{
     chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint},
 };
 
-/// 30-day summary statistics built from a sequence of daily aggregates.
+/// Summary statistics (min/max/avg) built from a sequence of temperature
+/// aggregates.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct DailyStats {
+struct TempStats {
     min: f64,
     max: f64,
     avg: f64,
 }
 
-/// Compute min/max/avg across a slice of daily temperature aggregates.
+/// Compute min/max/avg across an iterator of `(min, max, avg)` tuples.
 ///
-/// Returns `None` if the slice is empty. `avg` is the mean of the daily
-/// averages (not weighted by hours).
-fn compute_daily_stats(daily: &[DailyTemperature]) -> Option<DailyStats> {
-    if daily.is_empty() {
-        return None;
-    }
+/// Returns `None` if the iterator is empty. `avg` is the unweighted mean of
+/// the per-item averages.
+fn compute_stats<I>(iter: I) -> Option<TempStats>
+where
+    I: IntoIterator<Item = (f64, f64, f64)>,
+{
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
     let mut sum = 0.0;
-    for d in daily {
-        if d.minimum_temperature < min {
-            min = d.minimum_temperature;
+    let mut count = 0usize;
+    for (mn, mx, av) in iter {
+        if mn < min {
+            min = mn;
         }
-        if d.maximum_temperature > max {
-            max = d.maximum_temperature;
+        if mx > max {
+            max = mx;
         }
-        sum += d.average_temperature;
+        sum += av;
+        count += 1;
     }
-    Some(DailyStats {
+    (count > 0).then_some(TempStats {
         min,
         max,
-        avg: sum / daily.len() as f64,
+        avg: sum / count as f64,
     })
 }
 
 /// Format the text shown above the `/details` chart image.
-fn format_details_text(sensor: &Sensor, stats: Option<DailyStats>) -> String {
-    let mut out = format!("{} (#{})", sensor.device_name, sensor.id);
-    if let Some(temp) = sensor.latest_temperature {
-        write!(out, "\nCurrent: {temp:.1}°C").unwrap();
+fn format_details_text(
+    sensor: &Sensor,
+    stats_24h: Option<TempStats>,
+    stats_30d: Option<TempStats>,
+) -> String {
+    let mut out = sensor.device_name.clone();
+    if let Some(caption) = sensor.caption.as_deref().map(str::trim)
+        && !caption.is_empty()
+    {
+        write!(out, ": _{caption}_").unwrap();
     }
-    match stats {
-        Some(s) => {
-            write!(
-                out,
-                "\n\nLast 30 days:\n  min  {:.1}°C\n  max  {:.1}°C\n  avg  {:.1}°C",
-                s.min, s.max, s.avg
-            )
-            .unwrap();
-        }
-        None => {
-            out.push_str("\n\nNo recent measurements available.");
-        }
+    write!(out, "\n\n🌡️ *{}*", sensor.format_temperature_reading()).unwrap();
+    if let Some(s) = stats_24h {
+        write!(
+            out,
+            "\n\n_Over the last 24 hours, the temperature ranged from {:.1}°C to {:.1}°C, averaging {:.1}°C._",
+            s.min, s.max, s.avg
+        )
+        .unwrap();
+    }
+    if let Some(s) = stats_30d {
+        write!(
+            out,
+            "\n\n_Over the last 30 days, the temperature ranged from {:.1}°C to {:.1}°C, averaging {:.1}°C._",
+            s.min, s.max, s.avg
+        )
+        .unwrap();
     }
     out
 }
@@ -238,13 +251,20 @@ impl GfroerliHandler {
         let (daily, hourly) =
             tokio::try_join!(daily_fut, hourly_fut).map_err(HandlerError::from)?;
 
-        // Stats + text
-        let stats = compute_daily_stats(&daily);
-        let text = format_details_text(&sensor, stats);
-
-        // Render chart PNG
+        // Convert aggregates into chart points (hourly filters to last 24h)
         let hourly_chart = hourly_points(&hourly);
         let daily_chart = daily_points(&daily);
+
+        // Stats + text
+        let stats_24h = compute_stats(hourly_chart.iter().map(|p| (p.min, p.max, p.avg)));
+        let stats_30d = compute_stats(daily.iter().map(|d| {
+            (
+                d.minimum_temperature,
+                d.maximum_temperature,
+                d.average_temperature,
+            )
+        }));
+        let text = format_details_text(&sensor, stats_24h, stats_30d);
         let png = chart::render_sensor_charts(&sensor.device_name, &hourly_chart, &daily_chart)
             .map_err(HandlerError::from)?;
 
@@ -368,6 +388,7 @@ mod tests {
         Sensor {
             id,
             device_name: name.to_string(),
+            caption: None,
             latest_temperature: temp,
             latest_measurement_at: None,
         }
@@ -410,29 +431,19 @@ mod tests {
         }
     }
 
-    mod compute_daily_stats {
-        use chrono::NaiveDate;
+    mod compute_stats {
         use rstest::rstest;
 
         use super::*;
 
-        fn d(min: f64, max: f64, avg: f64) -> DailyTemperature {
-            DailyTemperature {
-                aggregation_date: NaiveDate::from_ymd_opt(2025, 7, 15).unwrap(),
-                minimum_temperature: min,
-                maximum_temperature: max,
-                average_temperature: avg,
-            }
-        }
-
         #[test]
         fn empty() {
-            assert_eq!(compute_daily_stats(&[]), None);
+            assert_eq!(compute_stats(std::iter::empty()), None);
         }
 
         #[test]
         fn single() {
-            let stats = compute_daily_stats(&[d(10.0, 20.0, 15.0)]).unwrap();
+            let stats = compute_stats([(10.0, 20.0, 15.0)]).unwrap();
             assert_eq!(stats.min, 10.0);
             assert_eq!(stats.max, 20.0);
             assert_eq!(stats.avg, 15.0);
@@ -447,8 +458,7 @@ mod tests {
             #[case] expected_max: f64,
             #[case] expected_avg: f64,
         ) {
-            let data: Vec<_> = input.iter().map(|(mn, mx, av)| d(*mn, *mx, *av)).collect();
-            let stats = compute_daily_stats(&data).unwrap();
+            let stats = compute_stats(input.iter().copied()).unwrap();
             assert_eq!(stats.min, expected_min);
             assert_eq!(stats.max, expected_max);
             assert!((stats.avg - expected_avg).abs() < 1e-9);
@@ -456,23 +466,58 @@ mod tests {
     }
 
     mod format_details_text {
+        use chrono::TimeDelta;
+
         use super::*;
+
+        fn sensor_with_time(id: u32, name: &str, temp: Option<f64>, hours_ago: i64) -> Sensor {
+            Sensor {
+                id,
+                device_name: name.to_string(),
+                caption: None,
+                latest_temperature: temp,
+                latest_measurement_at: Some(Utc::now() - TimeDelta::hours(hours_ago)),
+            }
+        }
 
         #[test]
         fn with_stats_and_current() {
-            let sensor = make_sensor(1, "Aare Bern", Some(18.3));
-            let stats = Some(DailyStats {
+            let sensor = sensor_with_time(1, "Aare Bern", Some(18.3), 2);
+            let stats_24h = Some(TempStats {
+                min: 17.8,
+                max: 19.2,
+                avg: 18.5,
+            });
+            let stats_30d = Some(TempStats {
                 min: 14.1,
                 max: 22.4,
                 avg: 18.7,
             });
-            insta::assert_snapshot!(format_details_text(&sensor, stats));
+            let text = format_details_text(&sensor, stats_24h, stats_30d);
+            assert_eq!(
+                text,
+                "Aare Bern\n\
+                 \n\
+                 🌡️ *18.3°C 😌 (2 hours ago)*\n\
+                 \n\
+                 _Over the last 24 hours, the temperature ranged from 17.8°C to 19.2°C, averaging 18.5°C._\n\
+                 \n\
+                 _Over the last 30 days, the temperature ranged from 14.1°C to 22.4°C, averaging 18.7°C._",
+            );
+        }
+
+        #[test]
+        fn with_caption() {
+            let mut sensor = sensor_with_time(6, "Kempraten", Some(18.3), 1);
+            sensor.caption = Some("Die Wassertemperatur in Kempraten.".to_string());
+            let text = format_details_text(&sensor, None, None);
+            assert!(text.starts_with("Kempraten: _Die Wassertemperatur in Kempraten._\n"));
         }
 
         #[test]
         fn without_stats() {
             let sensor = make_sensor(42, "Limmat Zürich", None);
-            insta::assert_snapshot!(format_details_text(&sensor, None));
+            insta::assert_snapshot!(format_details_text(&sensor, None, None));
         }
     }
 }

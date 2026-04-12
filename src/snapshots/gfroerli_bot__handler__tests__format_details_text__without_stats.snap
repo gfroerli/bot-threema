@@ -1,7 +1,7 @@
 ---
 source: src/handler.rs
-expression: "format_details_text(&sensor, None)"
+expression: "format_details_text(&sensor, None, None)"
 ---
-Limmat Zürich (#42)
+Limmat Zürich
 
-No recent measurements available.
+🌡️ *no recent measurement available*

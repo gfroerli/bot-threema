@@ -34,6 +34,8 @@ fn log_request_duration(endpoint: &str, elapsed: Duration) {
 pub struct Sensor {
     pub id: u32,
     pub device_name: String,
+    #[serde(default)]
+    pub caption: Option<String>,
     pub latest_temperature: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
     pub latest_measurement_at: Option<DateTime<Utc>>,
@@ -150,22 +152,29 @@ impl Sensor {
         }
     }
 
-    /// Format the current temperature reading.
+    /// Format the current temperature reading, prefixed with the sensor name.
     pub fn format_temperature(&self) -> String {
-        let name = &self.device_name;
+        format!(
+            "{}: {}",
+            self.device_name,
+            self.format_temperature_reading()
+        )
+    }
+
+    /// Format just the current temperature reading (without the sensor name),
+    /// e.g. `"18.3°C 😎 (5 minutes ago)"`.
+    pub fn format_temperature_reading(&self) -> String {
         match (self.latest_temperature, self.latest_measurement_at) {
             (Some(temp), Some(time)) => {
                 let emoji = temperature_emoji(Some(temp));
                 let relative = format_relative_time(time);
-                format!("{name}: {temp:.1}°C {emoji} ({relative})")
+                format!("{temp:.1}°C {emoji} ({relative})")
             }
             (Some(temp), None) => {
                 let emoji = temperature_emoji(Some(temp));
-                format!("{name}: {temp:.1}°C {emoji}")
+                format!("{temp:.1}°C {emoji}")
             }
-            _ => {
-                format!("{name}: no recent measurement available")
-            }
+            _ => "no recent measurement available".to_string(),
         }
     }
 }
@@ -351,6 +360,7 @@ mod tests {
         Sensor {
             id,
             device_name: name.to_string(),
+            caption: None,
             latest_temperature: temp,
             latest_measurement_at: time,
         }
