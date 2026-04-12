@@ -250,8 +250,8 @@ impl GfroerliHandler {
         )]))
     }
 
-    /// Handle `/info`: show information about the Gfrörli project.
-    fn handle_info() -> Action {
+    /// Handle `/about`: show information about the Gfrörli project.
+    fn handle_about() -> Action {
         Action::Respond(vec![Response::text(
             "Gfrörli is a community project that measures water temperatures in Swiss water bodies.\n\n\
              Website: https://gfrör.li/\n\n\
@@ -277,7 +277,7 @@ impl MessageHandler for GfroerliHandler {
                 "details",
                 "Show stats and charts for a sensor (e.g. /details Aare)",
             )
-            .register("info", "About the Gfrörli project")
+            .register("about", "About the Gfrörli project")
     }
 
     async fn handle_text(
@@ -303,7 +303,7 @@ impl MessageHandler for GfroerliHandler {
             "sensors" => self.handle_sensors(typing).await,
             "temp" => self.handle_temp(args, typing).await,
             "details" => self.handle_details(args, typing).await,
-            "info" => Ok(Self::handle_info()),
+            "about" => Ok(Self::handle_about()),
             _ => Ok(Action::ShowHelp { prelude: None }),
         }
     }
@@ -313,12 +313,12 @@ impl MessageHandler for GfroerliHandler {
 mod tests {
     use super::*;
 
-    mod handle_info {
+    mod handle_about {
         use super::*;
 
         #[test]
         fn returns_project_info() {
-            let action = GfroerliHandler::handle_info();
+            let action = GfroerliHandler::handle_about();
             let Action::Respond(responses) = action else {
                 panic!("expected Action::Respond");
             };
