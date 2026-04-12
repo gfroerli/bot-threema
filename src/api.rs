@@ -172,11 +172,11 @@ impl Sensor {
             (Some(temp), Some(time)) => {
                 let emoji = temperature_emoji(Some(temp));
                 let relative = format_relative_time(time);
-                format!("{temp:.1}°C {emoji} ({relative})")
+                format!("*{temp:.1}°C* {emoji} (_{relative}_)")
             }
             (Some(temp), None) => {
                 let emoji = temperature_emoji(Some(temp));
-                format!("{temp:.1}°C {emoji}")
+                format!("*{temp:.1}°C* {emoji}")
             }
             _ => "no recent measurement available".to_string(),
         }
@@ -447,7 +447,7 @@ mod tests {
             let sensor = make_sensor(1, "Aare Bern", Some(18.3), Some(time));
             assert_eq!(
                 sensor.format_temperature(),
-                "Aare Bern: 18.3°C 😌 (2 hours ago)"
+                "Aare Bern: *18.3°C* 😌 (_2 hours ago_)"
             );
         }
 

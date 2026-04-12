@@ -66,11 +66,11 @@ fn format_stats_text(
     {
         write!(out, ": _{caption}_").unwrap();
     }
-    write!(out, "\n\n🌡️ *{}*", sensor.format_temperature_reading()).unwrap();
+    write!(out, "\n\n🌡️ {}", sensor.format_temperature_reading()).unwrap();
     if let Some(s) = stats_24h {
         write!(
             out,
-            "\n\n_Over the last 24 hours, the temperature ranged from {:.1}°C to {:.1}°C, averaging {:.1}°C._",
+            "\n\nOver the last 24 hours, the temperature ranged from {:.1}°C to {:.1}°C, averaging {:.1}°C.",
             s.min, s.max, s.avg
         )
         .unwrap();
@@ -78,7 +78,7 @@ fn format_stats_text(
     if let Some(s) = stats_30d {
         write!(
             out,
-            "\n\n_Over the last 30 days, the temperature ranged from {:.1}°C to {:.1}°C, averaging {:.1}°C._",
+            "\n\nOver the last 30 days, the temperature ranged from {:.1}°C to {:.1}°C, averaging {:.1}°C.",
             s.min, s.max, s.avg
         )
         .unwrap();
@@ -86,7 +86,7 @@ fn format_stats_text(
     if let Some(max) = sensor.maximum_temperature {
         write!(
             out,
-            "\n\n_The highest temperature ever measured at this location was {max:.1}°C._"
+            "\n\nThe highest temperature ever measured at this location was {max:.1}°C."
         )
         .unwrap();
     }
@@ -509,11 +509,11 @@ mod tests {
                 text,
                 "Aare Bern\n\
                  \n\
-                 🌡️ *18.3°C 😌 (2 hours ago)*\n\
+                 🌡️ *18.3°C* 😌 (_2 hours ago_)\n\
                  \n\
-                 _Over the last 24 hours, the temperature ranged from 17.8°C to 19.2°C, averaging 18.5°C._\n\
+                 Over the last 24 hours, the temperature ranged from 17.8°C to 19.2°C, averaging 18.5°C.\n\
                  \n\
-                 _Over the last 30 days, the temperature ranged from 14.1°C to 22.4°C, averaging 18.7°C._",
+                 Over the last 30 days, the temperature ranged from 14.1°C to 22.4°C, averaging 18.7°C.",
             );
         }
 
@@ -523,7 +523,7 @@ mod tests {
             sensor.maximum_temperature = Some(27.4);
             let text = format_stats_text(&sensor, None, None);
             assert!(text.ends_with(
-                "\n\n_The highest temperature ever measured at this location was 27.4°C._"
+                "\n\nThe highest temperature ever measured at this location was 27.4°C."
             ));
         }
 
