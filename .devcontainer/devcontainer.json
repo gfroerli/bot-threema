@@ -11,7 +11,9 @@
     // Basic security: Limited capabilities
     "--cap-drop=ALL",
     "--cap-add=CHOWN",
-    "--cap-add=SETGID"
+    "--cap-add=SETGID",
+    // Override default DNS
+    "--dns=9.9.9.9"
   ],
 
   // Run as non-root user

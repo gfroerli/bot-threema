@@ -5,7 +5,7 @@ FROM docker.io/rust:1-slim-trixie
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends \
     build-essential pkg-config musl-tools ca-certificates man-db \
-    neovim less git curl wget unzip ripgrep locales file procps net-tools \
+    neovim less git curl wget unzip ripgrep locales file procps net-tools strace bind9-dnsutils \
     bubblewrap socat \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
