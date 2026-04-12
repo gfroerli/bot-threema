@@ -132,7 +132,7 @@ pub fn render_sensor_charts(
             dt.format("%H:%M").to_string()
         })?;
         draw_temperature_chart(&bottom, "Last 30 days", daily, |d: &NaiveDate| {
-            d.format("%b %d").to_string()
+            d.format("%d.%m.").to_string()
         })?;
 
         draw_footer(&footer_area)?;
