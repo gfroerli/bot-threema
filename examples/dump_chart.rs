@@ -17,8 +17,8 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use chrono::{TimeDelta, TimeZone, Utc};
-use gfroerli_bot::chart::{self, DailyPoint, HourlyPoint};
+use chrono::{TimeDelta, TimeZone};
+use gfroerli_bot::chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint};
 
 /// A full scenario: two data series driving the two charts.
 struct Scenario {
@@ -67,7 +67,9 @@ fn render(out: &Path, scenario: &Scenario) -> Result<()> {
 
 /// A normal summer week on a Swiss river.
 fn normal() -> Scenario {
-    let hourly_base = Utc.with_ymd_and_hms(2025, 7, 15, 0, 0, 0).unwrap();
+    let hourly_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
+        .unwrap();
     let hourly = (0..24)
         .map(|h| {
             let avg = 18.0 + (h as f64 * 0.2).sin();
@@ -80,7 +82,9 @@ fn normal() -> Scenario {
         })
         .collect();
 
-    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
+    let daily_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 6, 15, 12, 0, 0)
+        .unwrap();
     let daily = (0..30)
         .map(|d| {
             let avg = 17.0 + (d as f64 * 0.1).cos();
@@ -104,7 +108,9 @@ fn normal() -> Scenario {
 /// A spring-fed water body that barely changes temperature: everything
 /// stays between ~14.9 °C and ~15.5 °C.
 fn low_variability() -> Scenario {
-    let hourly_base = Utc.with_ymd_and_hms(2025, 7, 15, 0, 0, 0).unwrap();
+    let hourly_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
+        .unwrap();
     let hourly = (0..24)
         .map(|h| {
             let avg = 15.2 + 0.08 * (h as f64 * 0.5).sin();
@@ -117,7 +123,9 @@ fn low_variability() -> Scenario {
         })
         .collect();
 
-    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
+    let daily_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 6, 15, 12, 0, 0)
+        .unwrap();
     let daily = (0..30)
         .map(|d| {
             let avg = 15.2 + 0.12 * (d as f64 * 0.2).cos();
@@ -141,7 +149,9 @@ fn low_variability() -> Scenario {
 /// A mountain stream with wild swings: spikes and dips between ~3 °C and
 /// ~29 °C driven by sun, rain, and snowmelt.
 fn high_variability() -> Scenario {
-    let hourly_base = Utc.with_ymd_and_hms(2025, 7, 15, 0, 0, 0).unwrap();
+    let hourly_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
+        .unwrap();
     let hourly = (0..24)
         .map(|h| {
             let hf = h as f64;
@@ -155,7 +165,9 @@ fn high_variability() -> Scenario {
         })
         .collect();
 
-    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
+    let daily_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 6, 15, 12, 0, 0)
+        .unwrap();
     let daily = (0..30)
         .map(|d| {
             let df = d as f64;
@@ -181,7 +193,9 @@ fn high_variability() -> Scenario {
 /// smooth trend — the kind of series the spline interpolation is meant to
 /// visibly soften.
 fn jagged() -> Scenario {
-    let hourly_base = Utc.with_ymd_and_hms(2025, 7, 15, 0, 0, 0).unwrap();
+    let hourly_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
+        .unwrap();
     let hourly = (0..24)
         .map(|h| {
             let avg = 17.0 + 2.8 * noise(h as usize, 1);
@@ -194,7 +208,9 @@ fn jagged() -> Scenario {
         })
         .collect();
 
-    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
+    let daily_base = DISPLAY_TIMEZONE
+        .with_ymd_and_hms(2025, 6, 15, 12, 0, 0)
+        .unwrap();
     let daily = (0..30)
         .map(|d| {
             let avg = 16.0 + 3.5 * noise(d as usize, 2);

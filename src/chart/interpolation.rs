@@ -12,7 +12,7 @@
 //! on top of a min/max band: if the line overshot, it could visually escape
 //! the band and misrepresent the data.
 
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, TimeDelta, TimeZone};
 
 use super::ChartPoint;
 
@@ -31,10 +31,14 @@ pub trait LinearInterpolate: Clone {
     fn linear_interpolate(&self, other: &Self, t: f64) -> Self;
 }
 
-impl LinearInterpolate for DateTime<Utc> {
+impl<Tz: TimeZone> LinearInterpolate for DateTime<Tz> {
     fn linear_interpolate(&self, other: &Self, t: f64) -> Self {
-        let delta_ns = (*other - *self).num_nanoseconds().unwrap_or(0);
-        *self + TimeDelta::nanoseconds((delta_ns as f64 * t) as i64)
+        let delta_ns = other
+            .clone()
+            .signed_duration_since(self.clone())
+            .num_nanoseconds()
+            .unwrap_or(0);
+        self.clone() + TimeDelta::nanoseconds((delta_ns as f64 * t) as i64)
     }
 }
 
@@ -143,10 +147,10 @@ pub(super) fn interpolate_line<X: LinearInterpolate>(points: &[ChartPoint<X>]) -
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
+    use chrono::{TimeZone, Utc};
 
     use super::*;
-    use crate::chart::HourlyPoint;
+    use crate::chart::{DISPLAY_TIMEZONE, HourlyPoint};
 
     mod monotone_tangents {
         use super::*;
@@ -210,7 +214,10 @@ mod tests {
 
         fn point(ts: i64, avg: f64) -> HourlyPoint {
             HourlyPoint {
-                x: Utc.timestamp_opt(ts, 0).unwrap(),
+                x: Utc
+                    .timestamp_opt(ts, 0)
+                    .unwrap()
+                    .with_timezone(&DISPLAY_TIMEZONE),
                 min: avg - 0.5,
                 max: avg + 0.5,
                 avg,

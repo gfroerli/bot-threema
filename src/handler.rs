@@ -12,7 +12,7 @@ use threema_gateway_bot::{
 
 use crate::{
     api::{DailyTemperature, GfroerliClient, HourlyTemperature, Sensor},
-    chart::{self, DailyPoint, HourlyPoint},
+    chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint},
 };
 
 /// 30-day summary statistics built from a sequence of daily aggregates.
@@ -103,15 +103,15 @@ fn resolve_single_sensor(
     }
 }
 
-/// Convert API daily aggregates into chart points, anchored at noon UTC
-/// (the midpoint of the day in the chart's x coordinate space).
+/// Convert API daily aggregates into chart points, anchored at noon in the
+/// chart's display timezone.
 fn daily_points(daily: &[DailyTemperature]) -> Vec<DailyPoint> {
     daily
         .iter()
         .filter_map(|d| {
             let datetime = d.aggregation_date.and_hms_opt(12, 0, 0)?.and_utc();
             Some(DailyPoint {
-                x: datetime,
+                x: datetime.with_timezone(&DISPLAY_TIMEZONE),
                 min: d.minimum_temperature,
                 max: d.maximum_temperature,
                 avg: d.average_temperature,
@@ -121,7 +121,8 @@ fn daily_points(daily: &[DailyTemperature]) -> Vec<DailyPoint> {
 }
 
 /// Convert API hourly aggregates into chart points, keeping only those within
-/// the last 24 hours.
+/// the last 24 hours. Timestamps are converted to the chart's display
+/// timezone.
 fn hourly_points(hourly: &[HourlyTemperature]) -> Vec<HourlyPoint> {
     let cutoff = Utc::now() - TimeDelta::hours(24);
     let mut points: Vec<HourlyPoint> = hourly
@@ -131,8 +132,8 @@ fn hourly_points(hourly: &[HourlyTemperature]) -> Vec<HourlyPoint> {
                 .aggregation_date
                 .and_hms_opt(u32::from(h.aggregation_hour), 0, 0)?
                 .and_utc();
-            (datetime >= cutoff).then_some(HourlyPoint {
-                x: datetime,
+            (datetime >= cutoff).then(|| HourlyPoint {
+                x: datetime.with_timezone(&DISPLAY_TIMEZONE),
                 min: h.minimum_temperature,
                 max: h.maximum_temperature,
                 avg: h.average_temperature,

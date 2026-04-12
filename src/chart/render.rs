@@ -1,7 +1,8 @@
 //! Top-level chart rendering entry point and its drawing helpers.
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
+use chrono_tz::Tz;
 use plotters::{
     backend::{BitMapBackend, DrawingBackend},
     chart::ChartBuilder,
@@ -56,10 +57,10 @@ pub fn render_sensor_charts(
             body_area.split_vertically(body_height - FOOTER_AREA_HEIGHT);
         let (top, bottom) = charts_area.split_vertically((50).percent());
 
-        draw_temperature_chart(&top, "Last 24 hours", hourly, |dt: &DateTime<Utc>| {
+        draw_temperature_chart(&top, "Last 24 hours", hourly, 7, |dt: &DateTime<Tz>| {
             dt.format("%H:%M").to_string()
         })?;
-        draw_temperature_chart(&bottom, "Last 30 days", daily, |d: &DateTime<Utc>| {
+        draw_temperature_chart(&bottom, "Last 30 days", daily, 5, |d: &DateTime<Tz>| {
             d.format("%d.%m.").to_string()
         })?;
 
@@ -118,6 +119,7 @@ fn draw_temperature_chart<DB, X, XF>(
     area: &DrawingArea<DB, Shift>,
     caption: &str,
     points: &[ChartPoint<X>],
+    x_label_count: usize,
     x_label_formatter: XF,
 ) -> Result<()>
 where
@@ -151,7 +153,7 @@ where
 
     chart
         .configure_mesh()
-        .x_labels(5)
+        .x_labels(x_label_count)
         .x_label_formatter(&x_label_formatter)
         .y_labels(5)
         .y_label_formatter(&|v| format!("{v:.1}°C"))
@@ -244,6 +246,7 @@ mod tests {
     use chrono::{TimeDelta, TimeZone};
 
     use super::*;
+    use crate::chart::DISPLAY_TIMEZONE;
 
     mod y_range {
         use super::*;
@@ -273,7 +276,9 @@ mod tests {
         use super::*;
 
         fn sample_hourly() -> Vec<HourlyPoint> {
-            let base = Utc.with_ymd_and_hms(2025, 7, 15, 0, 0, 0).unwrap();
+            let base = DISPLAY_TIMEZONE
+                .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
+                .unwrap();
             (0..24)
                 .map(|h| {
                     let avg = 18.0 + (h as f64 * 0.2).sin();
@@ -288,7 +293,9 @@ mod tests {
         }
 
         fn sample_daily() -> Vec<DailyPoint> {
-            let base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
+            let base = DISPLAY_TIMEZONE
+                .with_ymd_and_hms(2025, 6, 15, 12, 0, 0)
+                .unwrap();
             (0..30)
                 .map(|d| {
                     let avg = 17.0 + (d as f64 * 0.1).cos();
@@ -321,7 +328,9 @@ mod tests {
 
         #[test]
         fn handles_single_point() {
-            let base = Utc.with_ymd_and_hms(2025, 7, 15, 12, 0, 0).unwrap();
+            let base = DISPLAY_TIMEZONE
+                .with_ymd_and_hms(2025, 7, 15, 12, 0, 0)
+                .unwrap();
             let hourly = vec![HourlyPoint {
                 x: base,
                 min: 18.0,
@@ -329,7 +338,7 @@ mod tests {
                 avg: 18.0,
             }];
             let daily = vec![DailyPoint {
-                x: Utc.with_ymd_and_hms(2025, 7, 15, 12, 0, 0).unwrap(),
+                x: base,
                 min: 18.0,
                 max: 18.0,
                 avg: 18.0,
