@@ -103,15 +103,19 @@ fn resolve_single_sensor(
     }
 }
 
-/// Convert API daily aggregates into chart points.
+/// Convert API daily aggregates into chart points, anchored at noon UTC
+/// (the midpoint of the day in the chart's x coordinate space).
 fn daily_points(daily: &[DailyTemperature]) -> Vec<DailyPoint> {
     daily
         .iter()
-        .map(|d| DailyPoint {
-            x: d.aggregation_date,
-            min: d.minimum_temperature,
-            max: d.maximum_temperature,
-            avg: d.average_temperature,
+        .filter_map(|d| {
+            let datetime = d.aggregation_date.and_hms_opt(12, 0, 0)?.and_utc();
+            Some(DailyPoint {
+                x: datetime,
+                min: d.minimum_temperature,
+                max: d.maximum_temperature,
+                avg: d.average_temperature,
+            })
         })
         .collect()
 }

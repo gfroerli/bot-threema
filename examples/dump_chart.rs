@@ -17,7 +17,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use chrono::{NaiveDate, TimeDelta, TimeZone, Utc};
+use chrono::{TimeDelta, TimeZone, Utc};
 use gfroerli_bot::chart::{self, DailyPoint, HourlyPoint};
 
 /// A full scenario: two data series driving the two charts.
@@ -80,7 +80,7 @@ fn normal() -> Scenario {
         })
         .collect();
 
-    let daily_base = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
     let daily = (0..30)
         .map(|d| {
             let avg = 17.0 + (d as f64 * 0.1).cos();
@@ -117,7 +117,7 @@ fn low_variability() -> Scenario {
         })
         .collect();
 
-    let daily_base = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
     let daily = (0..30)
         .map(|d| {
             let avg = 15.2 + 0.12 * (d as f64 * 0.2).cos();
@@ -155,7 +155,7 @@ fn high_variability() -> Scenario {
         })
         .collect();
 
-    let daily_base = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
     let daily = (0..30)
         .map(|d| {
             let df = d as f64;
@@ -194,7 +194,7 @@ fn jagged() -> Scenario {
         })
         .collect();
 
-    let daily_base = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+    let daily_base = Utc.with_ymd_and_hms(2025, 6, 15, 12, 0, 0).unwrap();
     let daily = (0..30)
         .map(|d| {
             let avg = 16.0 + 3.5 * noise(d as usize, 2);
