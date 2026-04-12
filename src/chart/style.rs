@@ -8,6 +8,10 @@ use plotters::style::{Color, FontStyle, RGBAColor, RGBColor, register_font};
 const FONT_REGULAR: &[u8] = include_bytes!("../../assets/NotoSans-Regular.ttf");
 /// Embedded bold sans-serif font (Noto Sans).
 const FONT_BOLD: &[u8] = include_bytes!("../../assets/NotoSans-Bold.ttf");
+/// Embedded app icon, shown in the footer.
+pub(super) const ICON_BYTES: &[u8] = include_bytes!("../../assets/icon-128.png");
+/// Gap (in render-scale pixels) between the footer text and the icon.
+pub(super) const FOOTER_ICON_GAP: i32 = 12 * RENDER_SCALE as i32;
 
 /// Final PNG width in pixels.
 ///
@@ -45,7 +49,7 @@ pub(super) const CHART_MARGIN: i32 = 15 * RENDER_SCALE as i32;
 /// Height of the x-axis label area below each chart.
 pub(super) const X_LABEL_AREA: i32 = 50 * RENDER_SCALE as i32;
 /// Width of the y-axis label area to the left of each chart.
-pub(super) const Y_LABEL_AREA: i32 = 80 * RENDER_SCALE as i32;
+pub(super) const Y_LABEL_AREA: i32 = 50 * RENDER_SCALE as i32;
 /// Height reserved at the bottom of the image for the footer.
 pub(super) const FOOTER_AREA_HEIGHT: i32 = 80 * RENDER_SCALE as i32;
 /// Right-side padding of the footer text.

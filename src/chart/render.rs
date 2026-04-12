@@ -20,10 +20,10 @@ use super::{
     ChartPoint, DailyPoint, HourlyPoint,
     interpolation::{LinearInterpolate, interpolate_line},
     style::{
-        CAPTION_FONT_SIZE, CHART_MARGIN, FOOTER_AREA_HEIGHT, FOOTER_FONT_SIZE,
-        FOOTER_PADDING_RIGHT, HEIGHT, LABEL_FONT_SIZE, LINE_WIDTH, RENDER_HEIGHT, RENDER_SCALE,
-        RENDER_WIDTH, TITLE_AREA_HEIGHT, TITLE_FONT_SIZE, TITLE_TOP_PADDING, WIDTH, X_LABEL_AREA,
-        Y_LABEL_AREA, avg_color, band_color, ensure_fonts_registered,
+        CAPTION_FONT_SIZE, CHART_MARGIN, FOOTER_AREA_HEIGHT, FOOTER_FONT_SIZE, FOOTER_ICON_GAP,
+        FOOTER_PADDING_RIGHT, HEIGHT, ICON_BYTES, LABEL_FONT_SIZE, LINE_WIDTH, RENDER_HEIGHT,
+        RENDER_SCALE, RENDER_WIDTH, TITLE_AREA_HEIGHT, TITLE_FONT_SIZE, TITLE_TOP_PADDING, WIDTH,
+        X_LABEL_AREA, Y_LABEL_AREA, avg_color, band_color, ensure_fonts_registered,
     },
 };
 
@@ -34,6 +34,15 @@ pub fn render_sensor_charts(
     daily: &[DailyPoint],
 ) -> Result<Vec<u8>> {
     ensure_fonts_registered();
+
+    // Footer icon height matches the visible extent of the two text lines.
+    // Top aligns with the top of the first line; height is baseline-to-baseline
+    // gap plus roughly cap-height for the top ascent and descent for the
+    // bottom. 0.75 × font-size approximates cap+descent well enough for
+    // Noto Sans to avoid extending below the URL line.
+    let footer_line_gap = (FOOTER_FONT_SIZE as f32 * 1.3) as i32;
+    let icon_side = (footer_line_gap + (FOOTER_FONT_SIZE as i32 * 3 / 4)) as u32;
+    let footer_text_right_offset = icon_side as i32 + FOOTER_ICON_GAP;
 
     // Render into a supersampled RGB buffer. We'll downscale afterwards.
     let mut buffer = vec![0u8; (RENDER_WIDTH * RENDER_HEIGHT * 3) as usize];
@@ -64,17 +73,38 @@ pub fn render_sensor_charts(
             d.format("%d.%m.").to_string()
         })?;
 
-        draw_footer(&footer_area)?;
+        draw_footer(&footer_area, footer_text_right_offset)?;
 
         root.present().context("failed to present drawing")?;
     }
 
-    // Downscale from the supersampled buffer to the final size with a Lanczos
-    // filter — this is what makes lines look even and text render cleanly.
+    // Alpha-blend the app icon onto the supersampled buffer before downscaling,
+    // so it receives the same Lanczos filter as the rest of the image.
     let rendered = image::RgbImage::from_raw(RENDER_WIDTH, RENDER_HEIGHT, buffer)
         .context("render buffer size mismatch")?;
+    let mut composed = image::DynamicImage::ImageRgb8(rendered).into_rgba8();
+    let icon = image::load_from_memory(ICON_BYTES)
+        .context("failed to load app icon")?
+        .into_rgba8();
+    let icon_resized = image::imageops::resize(
+        &icon,
+        icon_side,
+        icon_side,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let icon_x = (RENDER_WIDTH as i32 - icon_side as i32 - FOOTER_PADDING_RIGHT) as i64;
+    // Top-align with the text: the top of the first footer line sits at
+    // `center_y - line_gap/2 - font_size/2`.
+    let footer_center_y = RENDER_HEIGHT as i32 - FOOTER_AREA_HEIGHT / 2;
+    let text_top = footer_center_y - footer_line_gap / 2 - FOOTER_FONT_SIZE as i32 / 2;
+    let icon_y = text_top as i64;
+    image::imageops::overlay(&mut composed, &icon_resized, icon_x, icon_y);
+
+    // Downscale from the supersampled buffer to the final size with a Lanczos
+    // filter — this is what makes lines look even and text render cleanly.
+    let flattened = image::DynamicImage::ImageRgba8(composed).into_rgb8();
     let final_image = image::imageops::resize(
-        &rendered,
+        &flattened,
         WIDTH,
         HEIGHT,
         image::imageops::FilterType::Lanczos3,
@@ -139,6 +169,7 @@ where
     let x_min = points.iter().map(|p| p.x.clone()).min().unwrap();
     let x_max = points.iter().map(|p| p.x.clone()).max().unwrap();
     let (y_lo, y_hi) = y_range(points.iter().map(|p| (p.min, p.max)));
+    let y_decimals: usize = if (y_hi - y_lo) >= 4.0 { 0 } else { 1 };
 
     let mut chart = ChartBuilder::on(area)
         .caption(
@@ -156,7 +187,7 @@ where
         .x_labels(x_label_count)
         .x_label_formatter(&x_label_formatter)
         .y_labels(5)
-        .y_label_formatter(&|v| format!("{v:.1}°C"))
+        .y_label_formatter(&|v| format!("{v:.*}°C", y_decimals))
         .label_style(("sans-serif", LABEL_FONT_SIZE).into_font())
         .draw()
         .map_err(|e| anyhow::anyhow!("failed to draw mesh for '{caption}': {e}"))?;
@@ -207,13 +238,16 @@ where
 }
 
 /// Draw the footer text (project name + URL) right-aligned at the bottom.
-fn draw_footer<DB>(area: &DrawingArea<DB, Shift>) -> Result<()>
+///
+/// `extra_right_offset` reserves horizontal space to the right of the text
+/// (e.g. for the app icon overlaid after rendering).
+fn draw_footer<DB>(area: &DrawingArea<DB, Shift>, extra_right_offset: i32) -> Result<()>
 where
     DB: DrawingBackend,
     DB::ErrorType: 'static,
 {
     let (w, h) = area.dim_in_pixel();
-    let right = w as i32 - FOOTER_PADDING_RIGHT;
+    let right = w as i32 - FOOTER_PADDING_RIGHT - extra_right_offset;
     let line_gap = (FOOTER_FONT_SIZE as f32 * 1.3) as i32;
     let center_y = h as i32 / 2;
     let anchor = Pos::new(HPos::Right, VPos::Center);
