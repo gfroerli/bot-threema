@@ -1,0 +1,7 @@
+---
+source: src/handler.rs
+expression: "format_sponsor_text(&sensor, &sponsor)"
+---
+The sensor "Rhein Basel" is powered by "Partner Ltd":
+
+_A data partner _

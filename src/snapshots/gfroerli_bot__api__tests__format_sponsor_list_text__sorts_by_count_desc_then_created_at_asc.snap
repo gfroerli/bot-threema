@@ -1,0 +1,9 @@
+---
+source: src/api.rs
+expression: format_sponsor_list_text(sponsors)
+---
+Thanks to the following sponsors for supporting the Gfrörli project:
+
+- Top (_3 sensors_)
+- Older (_1 sensor_)
+- Newer (_1 sensor_)

@@ -1,0 +1,7 @@
+---
+source: src/api.rs
+expression: format_sponsor_list_text(sponsors)
+---
+Thanks to the following sponsors for supporting the Gfrörli project:
+
+- Threema (_1 sensor_)

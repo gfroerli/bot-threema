@@ -12,7 +12,10 @@ use threema_gateway_bot::{
 };
 
 use crate::{
-    api::{DailyTemperature, GfroerliClient, HourlyTemperature, Sensor},
+    api::{
+        DailyTemperature, GfroerliClient, HourlyTemperature, Sensor, Sponsor,
+        format_sponsor_list_text,
+    },
     chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint},
 };
 
@@ -91,6 +94,41 @@ fn format_stats_text(
         .unwrap();
     }
     out
+}
+
+/// Wrap each paragraph of a description in Threema italic markers. Threema
+/// markup is scoped to a single paragraph, so blocks separated by blank lines
+/// each need their own `_..._` pair. A trailing space before the closing `_`
+/// prevents the marker from fusing with any URL at the end of a paragraph.
+fn italicize_paragraphs(text: &str) -> String {
+    text.split("\n\n")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| format!("_{p} _"))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// Format the `/sponsor <sensor>` response text.
+fn format_sponsor_text(sensor: &Sensor, sponsor: &Sponsor) -> String {
+    let preposition = sponsor.sponsor_type.preposition();
+    let description = sponsor
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+    match description {
+        Some(desc) => format!(
+            "The sensor \"{}\" is {preposition} *{}*:\n\n{}",
+            sensor.device_name,
+            sponsor.name,
+            italicize_paragraphs(desc)
+        ),
+        None => format!(
+            "The sensor \"{}\" is {preposition} *{}*.",
+            sensor.device_name, sponsor.name
+        ),
+    }
 }
 
 /// Resolve a query to a single sensor, or produce a user-facing message
@@ -284,6 +322,58 @@ impl GfroerliHandler {
         )]))
     }
 
+    /// Handle `/sponsors`: list all project sponsors and how many sensors
+    /// each one backs.
+    async fn handle_sponsors(&self, typing: &TypingHandle) -> HandlerResult<Action> {
+        typing.send();
+
+        let sponsors = self.client.sponsors().await.map_err(HandlerError::from)?;
+        let text = format_sponsor_list_text(sponsors);
+        Ok(Action::Respond(vec![Response::text(text)]))
+    }
+
+    /// Handle `/sponsor <query>`: look up a sensor by name or ID and show
+    /// which sponsor backs it.
+    async fn handle_sponsor(&self, args: &str, typing: &TypingHandle) -> HandlerResult<Action> {
+        // Validate query
+        let query = args.trim();
+        if query.is_empty() {
+            return Ok(Action::Respond(vec![Response::text(
+                "Please specify a sensor name or ID.\n\nExample: /sponsor Aare\nExample: /sponsor 1\n\nUse /sensors to list all available sensors.",
+            )]));
+        }
+
+        // Start sending typing indicator
+        typing.send();
+
+        // Resolve query to a single sensor
+        let matches = self
+            .client
+            .find_sensors(query)
+            .await
+            .map_err(HandlerError::from)?;
+        let sensor = match resolve_single_sensor(query, matches, "/sponsor 1") {
+            Ok(sensor) => sensor,
+            Err(msg) => return Ok(Action::Respond(vec![Response::text(msg)])),
+        };
+
+        // Fetch sponsor for this sensor
+        let sponsor = self
+            .client
+            .sensor_sponsor(sensor.id)
+            .await
+            .map_err(HandlerError::from)?;
+
+        let text = match sponsor {
+            Some(sponsor) => format_sponsor_text(&sensor, &sponsor),
+            None => format!(
+                "No sponsor information available for \"{}\".",
+                sensor.device_name
+            ),
+        };
+        Ok(Action::Respond(vec![Response::text(text)]))
+    }
+
     /// Handle `/about`: show information about the Gfrörli project.
     fn handle_about(&self) -> Action {
         Action::Respond(vec![Response::text(format_about_text(
@@ -334,6 +424,8 @@ impl MessageHandler for GfroerliHandler {
                 "stats",
                 "Show stats and charts for a sensor (e.g. /stats Aare)",
             )
+            .register("sponsors", "List all project sponsors")
+            .register("sponsor", "Show sponsor for a sensor (e.g. /sponsor Aare)")
             .register("about", "About the Gfrörli project")
     }
 
@@ -360,6 +452,8 @@ impl MessageHandler for GfroerliHandler {
             "sensors" => self.handle_sensors(typing).await,
             "temp" => self.handle_temp(args, typing).await,
             "stats" => self.handle_stats(args, typing).await,
+            "sponsors" => self.handle_sponsors(typing).await,
+            "sponsor" => self.handle_sponsor(args, typing).await,
             "about" => Ok(self.handle_about()),
             _ => Ok(Action::ShowHelp { prelude: None }),
         }
@@ -368,6 +462,8 @@ impl MessageHandler for GfroerliHandler {
 
 #[cfg(test)]
 mod tests {
+    use crate::api::SponsorType;
+
     use super::*;
 
     mod format_about_text {
@@ -401,6 +497,75 @@ mod tests {
             latest_temperature: temp,
             latest_measurement_at: None,
             maximum_temperature: None,
+        }
+    }
+
+    fn make_sponsor(name: &str, description: Option<&str>, sponsor_type: SponsorType) -> Sponsor {
+        Sponsor {
+            id: 1,
+            name: name.to_string(),
+            description: description.map(str::to_string),
+            sponsor_type,
+            created_at: None,
+            sensor_ids: Vec::new(),
+        }
+    }
+
+    mod format_sponsor_text {
+        use super::*;
+
+        #[test]
+        fn sponsored_by_with_description() {
+            let sensor = make_sensor(1, "Aare Bern", None);
+            let sponsor = make_sponsor(
+                "Threema",
+                Some("Secure messaging from Switzerland"),
+                SponsorType::Sponsor,
+            );
+            insta::assert_snapshot!(format_sponsor_text(&sensor, &sponsor));
+        }
+
+        #[test]
+        fn powered_by_partner() {
+            let sensor = make_sensor(2, "Rhein Basel", None);
+            let sponsor = make_sponsor("Partner Ltd", Some("A data partner"), SponsorType::Partner);
+            insta::assert_snapshot!(format_sponsor_text(&sensor, &sponsor));
+        }
+
+        #[test]
+        fn powered_by_public_data_provider() {
+            let sensor = make_sensor(3, "Limmat Zürich", None);
+            let sponsor = make_sponsor(
+                "MeteoSwiss",
+                Some("Swiss weather service"),
+                SponsorType::PublicDataProvider,
+            );
+            insta::assert_snapshot!(format_sponsor_text(&sensor, &sponsor));
+        }
+
+        #[test]
+        fn no_description() {
+            let sensor = make_sensor(1, "Aare Bern", None);
+            let sponsor = make_sponsor("Threema", None, SponsorType::Sponsor);
+            insta::assert_snapshot!(format_sponsor_text(&sensor, &sponsor));
+        }
+
+        #[test]
+        fn multi_paragraph_description() {
+            let sensor = make_sensor(1, "Zugersee", None);
+            let sponsor = make_sponsor(
+                "Segel Club Cham",
+                Some("First paragraph about the club.\n\nMehr Infos unter https://www.scc.ch/"),
+                SponsorType::Sponsor,
+            );
+            insta::assert_snapshot!(format_sponsor_text(&sensor, &sponsor));
+        }
+
+        #[test]
+        fn empty_description_treated_as_none() {
+            let sensor = make_sensor(1, "Aare Bern", None);
+            let sponsor = make_sponsor("Threema", Some("   "), SponsorType::Sponsor);
+            insta::assert_snapshot!(format_sponsor_text(&sensor, &sponsor));
         }
     }
 

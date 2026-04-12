@@ -1,0 +1,7 @@
+---
+source: src/handler.rs
+expression: "format_sponsor_text(&sensor, &sponsor)"
+---
+The sensor "Limmat Zürich" is powered by "MeteoSwiss":
+
+_Swiss weather service _

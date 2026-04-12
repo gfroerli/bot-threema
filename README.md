@@ -7,6 +7,8 @@ A Threema bot for querying water temperatures from the [Gfrörli](https://gfrör
 - `/sensors` — List all available sensors
 - `/temp <query>` — Get the current temperature for a sensor (by name or ID)
 - `/stats <query>` — Show stats and charts for a sensor (by name or ID)
+- `/sponsors` — List all project sponsors
+- `/sponsor <query>` — Show the sponsor for a sensor (by name or ID)
 - `/about` — About the Gfrörli project
 - `/help` — Show available commands
 

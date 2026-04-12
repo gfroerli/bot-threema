@@ -45,6 +45,44 @@ pub struct Sensor {
     pub maximum_temperature: Option<f64>,
 }
 
+/// A sponsor of the Gfrörli project.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Sponsor {
+    pub id: u32,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub sponsor_type: SponsorType,
+    #[serde(default)]
+    pub created_at: Option<DateTime<Utc>>,
+    /// IDs of the sensors backed by this sponsor. Populated by the
+    /// `/api/sponsors` index; not returned by the mobile_app sponsor endpoint.
+    #[serde(default)]
+    pub sensor_ids: Vec<u32>,
+}
+
+/// The relationship a sponsor has to the project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SponsorType {
+    Sponsor,
+    PublicDataProvider,
+    Partner,
+    #[serde(other)]
+    Unknown,
+}
+
+impl SponsorType {
+    /// The phrase used in `/sponsor <sensor>` output. "Sponsored by" for
+    /// actual sponsors, "powered by" for everything else.
+    pub fn preposition(self) -> &'static str {
+        match self {
+            SponsorType::Sponsor => "sponsored by",
+            _ => "powered by",
+        }
+    }
+}
+
 /// Deserialize an optional Unix timestamp (seconds) into `Option<DateTime<Utc>>`.
 fn deserialize_optional_timestamp<'de, D>(
     deserializer: D,
@@ -105,6 +143,38 @@ fn format_sensor_list_text(mut sensors: Vec<Sensor>) -> String {
     let mut output = String::from("Available sensors:\n\n");
     for sensor in &sensors {
         writeln!(output, "{}", sensor.format_list_entry()).unwrap();
+    }
+    output.truncate(output.trim_end().len());
+    output
+}
+
+/// Format the `/sponsors` list: filter to actual sponsors (those with at
+/// least one linked sensor) and sort by sensor count (desc), then by
+/// `created_at` (asc).
+pub fn format_sponsor_list_text(sponsors: Vec<Sponsor>) -> String {
+    let mut sponsors: Vec<Sponsor> = sponsors
+        .into_iter()
+        .filter(|s| s.sponsor_type == SponsorType::Sponsor && !s.sensor_ids.is_empty())
+        .collect();
+
+    if sponsors.is_empty() {
+        return "No sponsors to list.".to_string();
+    }
+
+    sponsors.sort_by(|a, b| {
+        b.sensor_ids
+            .len()
+            .cmp(&a.sensor_ids.len())
+            .then_with(|| a.created_at.cmp(&b.created_at))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    let mut output =
+        String::from("Thanks to the following sponsors for supporting the Gfrörli project:\n\n");
+    for sponsor in &sponsors {
+        let count = sponsor.sensor_ids.len();
+        let unit = if count == 1 { "sensor" } else { "sensors" };
+        writeln!(output, "- {} (_{count} {unit}_)", sponsor.name).unwrap();
     }
     output.truncate(output.trim_end().len());
     output
@@ -305,6 +375,48 @@ impl GfroerliClient {
         Ok(sensor)
     }
 
+    /// Fetch all sponsors from the CRUD index endpoint.
+    pub async fn sponsors(&self) -> anyhow::Result<Vec<Sponsor>> {
+        let endpoint = "/api/sponsors";
+        let url = format!("{}{endpoint}", self.config.api_url);
+
+        let start = Instant::now();
+        let sponsors: Vec<Sponsor> = self
+            .http
+            .get(&url)
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        log_request_duration(&format!("GET {endpoint}"), start.elapsed());
+
+        Ok(sponsors)
+    }
+
+    /// Fetch the sponsor associated with a given sensor, if any. Returns
+    /// `Ok(None)` if the sensor has no sponsor (HTTP 404).
+    pub async fn sensor_sponsor(&self, sensor_id: u32) -> anyhow::Result<Option<Sponsor>> {
+        let endpoint = format!("/api/mobile_app/sensors/{sensor_id}/sponsor");
+        let url = format!("{}{endpoint}", self.config.api_url);
+
+        let start = Instant::now();
+        let response = self
+            .http
+            .get(&url)
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await?;
+        log_request_duration(&format!("GET {endpoint}"), start.elapsed());
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let sponsor: Sponsor = response.error_for_status()?.json().await?;
+        Ok(Some(sponsor))
+    }
+
     /// Fetch daily temperature aggregates for a sensor over a date range.
     pub async fn daily_temperatures(
         &self,
@@ -389,6 +501,23 @@ mod tests {
             latest_temperature: temp,
             latest_measurement_at: time,
             maximum_temperature: None,
+        }
+    }
+
+    fn make_sponsor(
+        id: u32,
+        name: &str,
+        sponsor_type: SponsorType,
+        created_at: Option<DateTime<Utc>>,
+        sensor_ids: Vec<u32>,
+    ) -> Sponsor {
+        Sponsor {
+            id,
+            name: name.to_string(),
+            description: None,
+            sponsor_type,
+            created_at,
+            sensor_ids,
         }
     }
 
@@ -645,6 +774,164 @@ mod tests {
         #[test]
         fn empty() {
             assert_eq!(format_sensor_list_text(vec![]), "No sensors found.");
+        }
+    }
+
+    mod deserialize_sponsor {
+        use super::*;
+
+        #[test]
+        fn full_sponsor() {
+            let json = r#"{
+                "id": 1,
+                "name": "Threema",
+                "description": "Secure messaging",
+                "sponsor_type": "sponsor",
+                "created_at": "2024-01-15T10:30:00Z"
+            }"#;
+            let sponsor: Sponsor = serde_json::from_str(json).unwrap();
+            assert_eq!(sponsor.id, 1);
+            assert_eq!(sponsor.name, "Threema");
+            assert_eq!(sponsor.description.as_deref(), Some("Secure messaging"));
+            assert_eq!(sponsor.sponsor_type, SponsorType::Sponsor);
+            assert_eq!(
+                sponsor.created_at,
+                Some(Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap())
+            );
+        }
+
+        #[test]
+        fn public_data_provider() {
+            let json = r#"{"id": 2, "name": "MeteoSwiss", "sponsor_type": "public_data_provider"}"#;
+            let sponsor: Sponsor = serde_json::from_str(json).unwrap();
+            assert_eq!(sponsor.sponsor_type, SponsorType::PublicDataProvider);
+            assert_eq!(sponsor.description, None);
+            assert_eq!(sponsor.created_at, None);
+        }
+
+        #[test]
+        fn partner() {
+            let json = r#"{"id": 3, "name": "OST", "sponsor_type": "partner"}"#;
+            let sponsor: Sponsor = serde_json::from_str(json).unwrap();
+            assert_eq!(sponsor.sponsor_type, SponsorType::Partner);
+        }
+
+        #[test]
+        fn unknown_type_falls_back() {
+            let json = r#"{"id": 4, "name": "X", "sponsor_type": "future_thing"}"#;
+            let sponsor: Sponsor = serde_json::from_str(json).unwrap();
+            assert_eq!(sponsor.sponsor_type, SponsorType::Unknown);
+        }
+    }
+
+    mod format_sponsor_list_text {
+        use super::*;
+
+        fn ts(year: i32, month: u32, day: u32) -> DateTime<Utc> {
+            Utc.with_ymd_and_hms(year, month, day, 0, 0, 0).unwrap()
+        }
+
+        #[test]
+        fn empty() {
+            assert_eq!(format_sponsor_list_text(vec![]), "No sponsors to list.");
+        }
+
+        #[test]
+        fn singular_and_plural() {
+            let sponsors = vec![
+                make_sponsor(
+                    1,
+                    "Threema",
+                    SponsorType::Sponsor,
+                    Some(ts(2020, 1, 1)),
+                    vec![10, 11, 12],
+                ),
+                make_sponsor(
+                    2,
+                    "OST",
+                    SponsorType::Sponsor,
+                    Some(ts(2021, 1, 1)),
+                    vec![13],
+                ),
+            ];
+            insta::assert_snapshot!(format_sponsor_list_text(sponsors));
+        }
+
+        #[test]
+        fn sorts_by_count_desc_then_created_at_asc() {
+            let sponsors = vec![
+                make_sponsor(
+                    1,
+                    "Newer",
+                    SponsorType::Sponsor,
+                    Some(ts(2023, 1, 1)),
+                    vec![13],
+                ),
+                make_sponsor(
+                    2,
+                    "Older",
+                    SponsorType::Sponsor,
+                    Some(ts(2020, 1, 1)),
+                    vec![14],
+                ),
+                make_sponsor(
+                    3,
+                    "Top",
+                    SponsorType::Sponsor,
+                    Some(ts(2022, 1, 1)),
+                    vec![10, 11, 12],
+                ),
+            ];
+            insta::assert_snapshot!(format_sponsor_list_text(sponsors));
+        }
+
+        #[test]
+        fn filters_non_sponsor_types() {
+            let sponsors = vec![
+                make_sponsor(
+                    1,
+                    "Threema",
+                    SponsorType::Sponsor,
+                    Some(ts(2020, 1, 1)),
+                    vec![10],
+                ),
+                make_sponsor(
+                    2,
+                    "MeteoSwiss",
+                    SponsorType::PublicDataProvider,
+                    Some(ts(2019, 1, 1)),
+                    vec![11],
+                ),
+                make_sponsor(
+                    3,
+                    "Partner",
+                    SponsorType::Partner,
+                    Some(ts(2018, 1, 1)),
+                    vec![12],
+                ),
+            ];
+            insta::assert_snapshot!(format_sponsor_list_text(sponsors));
+        }
+
+        #[test]
+        fn excludes_zero_sensor_sponsors() {
+            let sponsors = vec![
+                make_sponsor(
+                    1,
+                    "Active",
+                    SponsorType::Sponsor,
+                    Some(ts(2020, 1, 1)),
+                    vec![10],
+                ),
+                make_sponsor(
+                    2,
+                    "Ghost",
+                    SponsorType::Sponsor,
+                    Some(ts(2019, 1, 1)),
+                    vec![],
+                ),
+            ];
+            insta::assert_snapshot!(format_sponsor_list_text(sponsors));
         }
     }
 }

@@ -1,0 +1,9 @@
+---
+source: src/handler.rs
+expression: "format_sponsor_text(&sensor, &sponsor)"
+---
+The sensor "Zugersee" is sponsored by "Segel Club Cham":
+
+_First paragraph about the club. _
+
+_Mehr Infos unter https://www.scc.ch/ _
