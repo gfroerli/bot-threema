@@ -114,18 +114,24 @@ fn hermite(y0: f64, y1: f64, m0: f64, m1: f64, t: f64) -> f64 {
 
 /// Produce a denser sequence of `(x, y)` pairs using monotone cubic
 /// (Fritsch-Carlson) interpolation for the y values and linear interpolation
-/// for the x values.
+/// for the x values. The y value for each input point is picked via
+/// `extract`, which lets callers smooth the `avg`, `min`, or `max` series
+/// using the same algorithm.
 ///
 /// The returned series passes exactly through every original point — no
-/// min/max values are altered, only additional in-between points are added
-/// so that plotters' straight-line rendering looks like a smooth curve. The
+/// y values are altered, only additional in-between points are added so that
+/// plotters' straight-line rendering looks like a smooth curve. The
 /// interpolated y value between two adjacent data points is bounded by their
 /// own y values (no overshoot).
-pub(super) fn interpolate_line<X: LinearInterpolate>(points: &[ChartPoint<X>]) -> Vec<(X, f64)> {
+pub(super) fn interpolate_series<X, F>(points: &[ChartPoint<X>], extract: F) -> Vec<(X, f64)>
+where
+    X: LinearInterpolate,
+    F: Fn(&ChartPoint<X>) -> f64,
+{
     if points.len() < 2 {
-        return points.iter().map(|p| (p.x.clone(), p.avg)).collect();
+        return points.iter().map(|p| (p.x.clone(), extract(p))).collect();
     }
-    let ys: Vec<f64> = points.iter().map(|p| p.avg).collect();
+    let ys: Vec<f64> = points.iter().map(&extract).collect();
     let tangents = monotone_tangents(&ys);
     let n = points.len();
     let mut out: Vec<(X, f64)> = Vec::with_capacity((n - 1) * INTERPOLATION_SUBDIVISIONS + 1);
@@ -141,7 +147,7 @@ pub(super) fn interpolate_line<X: LinearInterpolate>(points: &[ChartPoint<X>]) -
             out.push((x, y));
         }
     }
-    out.push((points[n - 1].x.clone(), points[n - 1].avg));
+    out.push((points[n - 1].x.clone(), ys[n - 1]));
     out
 }
 
@@ -209,7 +215,7 @@ mod tests {
         }
     }
 
-    mod interpolate_line {
+    mod interpolate_series {
         use super::*;
 
         fn point(ts: i64, avg: f64) -> HourlyPoint {
@@ -227,13 +233,13 @@ mod tests {
         #[test]
         fn empty_input() {
             let empty: Vec<HourlyPoint> = vec![];
-            assert!(interpolate_line(&empty).is_empty());
+            assert!(interpolate_series(&empty, |p| p.avg).is_empty());
         }
 
         #[test]
         fn single_point_returned_as_is() {
             let input = vec![point(0, 10.0)];
-            let out = interpolate_line(&input);
+            let out = interpolate_series(&input, |p| p.avg);
             assert_eq!(out.len(), 1);
             assert_eq!(out[0].1, 10.0);
         }
@@ -241,7 +247,7 @@ mod tests {
         #[test]
         fn passes_through_every_original_point() {
             let input: Vec<HourlyPoint> = (0..6).map(|i| point(i * 3600, i as f64 * 2.0)).collect();
-            let out = interpolate_line(&input);
+            let out = interpolate_series(&input, |p| p.avg);
             // The first subdivision of each segment is the segment's start point.
             for (i, original) in input.iter().enumerate() {
                 let idx = i * INTERPOLATION_SUBDIVISIONS;
@@ -258,7 +264,7 @@ mod tests {
         #[test]
         fn generates_n_minus_one_times_subdivisions_plus_one_points() {
             let input: Vec<HourlyPoint> = (0..4).map(|i| point(i * 3600, i as f64)).collect();
-            let out = interpolate_line(&input);
+            let out = interpolate_series(&input, |p| p.avg);
             assert_eq!(
                 out.len(),
                 (input.len() - 1) * INTERPOLATION_SUBDIVISIONS + 1
@@ -276,7 +282,7 @@ mod tests {
                 .enumerate()
                 .map(|(i, &y)| point(i as i64 * 3600, y))
                 .collect();
-            let out = interpolate_line(&input);
+            let out = interpolate_series(&input, |p| p.avg);
 
             for seg in 0..ys.len() - 1 {
                 let lo = ys[seg].min(ys[seg + 1]);

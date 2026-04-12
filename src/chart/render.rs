@@ -18,7 +18,7 @@ use plotters::{
 
 use super::{
     ChartPoint, DailyPoint, HourlyPoint,
-    interpolation::{LinearInterpolate, interpolate_line},
+    interpolation::{LinearInterpolate, interpolate_series},
     style::{
         CAPTION_FONT_SIZE, CHART_MARGIN, FOOTER_AREA_HEIGHT, FOOTER_FONT_SIZE, FOOTER_ICON_GAP,
         FOOTER_PADDING_RIGHT, HEIGHT, ICON_BYTES, LABEL_FONT_SIZE, LINE_WIDTH, RENDER_HEIGHT,
@@ -192,17 +192,20 @@ where
         .draw()
         .map_err(|e| anyhow::anyhow!("failed to draw mesh for '{caption}': {e}"))?;
 
-    // Min/max band (forward min, reverse max polygon)
-    let mut band: Vec<(X, f64)> = points.iter().map(|p| (p.x.clone(), p.min)).collect();
-    band.extend(points.iter().rev().map(|p| (p.x.clone(), p.max)));
+    // Min/max band, smoothed with the same monotone-cubic interpolation as
+    // the average line so the band edges match the line's curvature. The
+    // polygon walks the min edge forward and the max edge backward.
+    let min_line = interpolate_series(points, |p| p.min);
+    let max_line = interpolate_series(points, |p| p.max);
+    let mut band: Vec<(X, f64)> = min_line;
+    band.extend(max_line.into_iter().rev());
     chart
         .draw_series(std::iter::once(Polygon::new(band, band_color().filled())))
         .map_err(|e| anyhow::anyhow!("failed to draw band for '{caption}': {e}"))?;
 
-    // Average line — interpolate with a Catmull-Rom spline so that plotters'
-    // straight-line rendering visually becomes a smooth curve. The line still
-    // passes exactly through every original data point.
-    let line = interpolate_line(points);
+    // Average line, smoothed with the same monotone-cubic interpolation as
+    // the band edges
+    let line = interpolate_series(points, |p| p.avg);
     chart
         .draw_series(LineSeries::new(
             line,

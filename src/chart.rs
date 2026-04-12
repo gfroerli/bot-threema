@@ -6,7 +6,7 @@
 //!
 //! Submodules:
 //!
-//! - [`interpolation`] — Catmull-Rom spline interpolation of line series
+//! - [`interpolation`] — monotone cubic interpolation of line series
 //! - [`render`] — the top-level [`render_sensor_charts`] entry point and its
 //!   plotters-based drawing helpers
 //! - [`style`] — bundled fonts, sizing constants, and color helpers
