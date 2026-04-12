@@ -1,6 +1,6 @@
 ---
 source: src/handler.rs
-expression: "format_details_text(&sensor, None, None)"
+expression: "format_stats_text(&sensor, None, None)"
 ---
 Limmat Zürich
 

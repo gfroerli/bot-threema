@@ -54,8 +54,8 @@ where
     })
 }
 
-/// Format the text shown above the `/details` chart image.
-fn format_details_text(
+/// Format the text shown above the `/stats` chart image.
+fn format_stats_text(
     sensor: &Sensor,
     stats_24h: Option<TempStats>,
     stats_30d: Option<TempStats>,
@@ -89,8 +89,8 @@ fn format_details_text(
 /// Resolve a query to a single sensor, or produce a user-facing message
 /// describing why disambiguation is needed.
 ///
-/// Used by both `/temp` and `/details`. The `command_hint` is injected into
-/// the disambiguation footer (e.g. `"/temp 1"` or `"/details 1"`).
+/// Used by both `/temp` and `/stats`. The `command_hint` is injected into
+/// the disambiguation footer (e.g. `"/temp 1"` or `"/stats 1"`).
 fn resolve_single_sensor(
     query: &str,
     matches: Vec<Sensor>,
@@ -212,14 +212,14 @@ impl GfroerliHandler {
         Ok(Action::Respond(vec![Response::text(text)]))
     }
 
-    /// Handle `/details <query>`: show 30-day stats plus a PNG with hourly and
+    /// Handle `/stats <query>`: show 30-day stats plus a PNG with hourly and
     /// daily temperature charts.
-    async fn handle_details(&self, args: &str, typing: &TypingHandle) -> HandlerResult<Action> {
+    async fn handle_stats(&self, args: &str, typing: &TypingHandle) -> HandlerResult<Action> {
         // Validate query
         let query = args.trim();
         if query.is_empty() {
             return Ok(Action::Respond(vec![Response::text(
-                "Please specify a sensor name or ID.\n\nExample: /details Aare\nExample: /details 1\n\nUse /sensors to list all available sensors.",
+                "Please specify a sensor name or ID.\n\nExample: /stats Aare\nExample: /stats 1\n\nUse /sensors to list all available sensors.",
             )]));
         }
 
@@ -232,7 +232,7 @@ impl GfroerliHandler {
             .find_sensors(query)
             .await
             .map_err(HandlerError::from)?;
-        let sensor = match resolve_single_sensor(query, matches, "/details 1") {
+        let sensor = match resolve_single_sensor(query, matches, "/stats 1") {
             Ok(sensor) => sensor,
             Err(msg) => return Ok(Action::Respond(vec![Response::text(msg)])),
         };
@@ -264,7 +264,7 @@ impl GfroerliHandler {
                 d.average_temperature,
             )
         }));
-        let text = format_details_text(&sensor, stats_24h, stats_30d);
+        let text = format_stats_text(&sensor, stats_24h, stats_30d);
         let png = chart::render_sensor_charts(&sensor.device_name, &hourly_chart, &daily_chart)
             .map_err(HandlerError::from)?;
 
@@ -322,8 +322,8 @@ impl MessageHandler for GfroerliHandler {
             .register("sensors", "List all available sensors")
             .register("temp", "Get current temperature (e.g. /temp Aare)")
             .register(
-                "details",
-                "Show stats and charts for a sensor (e.g. /details Aare)",
+                "stats",
+                "Show stats and charts for a sensor (e.g. /stats Aare)",
             )
             .register("about", "About the Gfrörli project")
     }
@@ -350,7 +350,7 @@ impl MessageHandler for GfroerliHandler {
         match command {
             "sensors" => self.handle_sensors(typing).await,
             "temp" => self.handle_temp(args, typing).await,
-            "details" => self.handle_details(args, typing).await,
+            "stats" => self.handle_stats(args, typing).await,
             "about" => Ok(self.handle_about()),
             _ => Ok(Action::ShowHelp { prelude: None }),
         }
@@ -421,12 +421,12 @@ mod tests {
         }
 
         #[test]
-        fn multiple_matches_details_hint() {
+        fn multiple_matches_stats_hint() {
             let sensors = vec![
                 make_sensor(1, "Aare Bern", Some(18.3)),
                 make_sensor(3, "Aare Thun", Some(17.1)),
             ];
-            let err = resolve_single_sensor("Aare", sensors, "/details 1").unwrap_err();
+            let err = resolve_single_sensor("Aare", sensors, "/stats 1").unwrap_err();
             insta::assert_snapshot!(err);
         }
     }
@@ -465,7 +465,7 @@ mod tests {
         }
     }
 
-    mod format_details_text {
+    mod format_stats_text {
         use chrono::TimeDelta;
 
         use super::*;
@@ -493,7 +493,7 @@ mod tests {
                 max: 22.4,
                 avg: 18.7,
             });
-            let text = format_details_text(&sensor, stats_24h, stats_30d);
+            let text = format_stats_text(&sensor, stats_24h, stats_30d);
             assert_eq!(
                 text,
                 "Aare Bern\n\
@@ -510,14 +510,14 @@ mod tests {
         fn with_caption() {
             let mut sensor = sensor_with_time(6, "Kempraten", Some(18.3), 1);
             sensor.caption = Some("Die Wassertemperatur in Kempraten.".to_string());
-            let text = format_details_text(&sensor, None, None);
+            let text = format_stats_text(&sensor, None, None);
             assert!(text.starts_with("Kempraten: _Die Wassertemperatur in Kempraten._\n"));
         }
 
         #[test]
         fn without_stats() {
             let sensor = make_sensor(42, "Limmat Zürich", None);
-            insta::assert_snapshot!(format_details_text(&sensor, None, None));
+            insta::assert_snapshot!(format_stats_text(&sensor, None, None));
         }
     }
 }
