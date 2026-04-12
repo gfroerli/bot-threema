@@ -26,10 +26,41 @@ const FONT_REGULAR: &[u8] = include_bytes!("../assets/NotoSans-Regular.ttf");
 /// Embedded bold sans-serif font (Noto Sans).
 const FONT_BOLD: &[u8] = include_bytes!("../assets/NotoSans-Bold.ttf");
 
-/// Width of the rendered PNG in pixels.
-const WIDTH: u32 = 900;
-/// Height of the rendered PNG in pixels.
-const HEIGHT: u32 = 760;
+/// Final PNG width in pixels.
+///
+/// Sized for phone chat display — small enough that the built-in font sizes
+/// below remain readable after Threema scales the image to the chat width.
+const WIDTH: u32 = 720;
+/// Final PNG height in pixels.
+const HEIGHT: u32 = 1000;
+
+/// Supersampling factor: render into a buffer this many times larger than the
+/// final image, then downscale with a Lanczos filter. This smooths plotters'
+/// jagged thick-line rendering and compensates for the ab_glyph text backend
+/// producing poorly-kerned glyphs at the target font sizes.
+const RENDER_SCALE: u32 = 2;
+
+/// Internal render width (before downscaling).
+const RENDER_WIDTH: u32 = WIDTH * RENDER_SCALE;
+/// Internal render height (before downscaling).
+const RENDER_HEIGHT: u32 = HEIGHT * RENDER_SCALE;
+
+/// Font size of the top-level sensor name title.
+const TITLE_FONT_SIZE: u32 = 42 * RENDER_SCALE;
+/// Font size of each chart's caption (e.g. "Last 24 hours").
+const CAPTION_FONT_SIZE: u32 = 26 * RENDER_SCALE;
+/// Font size of axis tick labels.
+const LABEL_FONT_SIZE: u32 = 20 * RENDER_SCALE;
+/// Stroke width of the average temperature line.
+const LINE_WIDTH: u32 = 3 * RENDER_SCALE;
+/// Height of the title area at the top of the chart.
+const TITLE_AREA_HEIGHT: i32 = 70 * RENDER_SCALE as i32;
+/// Outer margin around each chart panel.
+const CHART_MARGIN: i32 = 15 * RENDER_SCALE as i32;
+/// Height of the x-axis label area below each chart.
+const X_LABEL_AREA: i32 = 50 * RENDER_SCALE as i32;
+/// Width of the y-axis label area to the left of each chart.
+const Y_LABEL_AREA: i32 = 80 * RENDER_SCALE as i32;
 
 /// Ensure fonts are registered exactly once for the plotters `ab_glyph` backend.
 static REGISTER_FONTS: Once = Once::new();
@@ -66,17 +97,20 @@ pub fn render_sensor_charts(
 ) -> Result<Vec<u8>> {
     ensure_fonts_registered();
 
-    // Render into an RGB buffer, then encode as PNG at the end
-    let mut buffer = vec![0u8; (WIDTH * HEIGHT * 3) as usize];
+    // Render into a supersampled RGB buffer. We'll downscale afterwards.
+    let mut buffer = vec![0u8; (RENDER_WIDTH * RENDER_HEIGHT * 3) as usize];
     {
-        let backend = BitMapBackend::with_buffer(&mut buffer, (WIDTH, HEIGHT));
+        let backend = BitMapBackend::with_buffer(&mut buffer, (RENDER_WIDTH, RENDER_HEIGHT));
         let root = backend.into_drawing_area();
         root.fill(&WHITE).context("failed to fill background")?;
 
         // Title area + two stacked chart areas
-        let (title_area, charts_area) = root.split_vertically(50);
+        let (title_area, charts_area) = root.split_vertically(TITLE_AREA_HEIGHT);
         title_area
-            .titled(title, ("sans-serif", 28, FontStyle::Bold).into_font())
+            .titled(
+                title,
+                ("sans-serif", TITLE_FONT_SIZE, FontStyle::Bold).into_font(),
+            )
             .context("failed to draw title")?;
         let (top, bottom) = charts_area.split_vertically((50).percent());
 
@@ -90,12 +124,23 @@ pub fn render_sensor_charts(
         root.present().context("failed to present drawing")?;
     }
 
-    // Encode the RGB buffer as PNG
-    let mut png = Vec::with_capacity(buffer.len() / 4);
+    // Downscale from the supersampled buffer to the final size with a Lanczos
+    // filter — this is what makes lines look even and text render cleanly.
+    let rendered = image::RgbImage::from_raw(RENDER_WIDTH, RENDER_HEIGHT, buffer)
+        .context("render buffer size mismatch")?;
+    let final_image = image::imageops::resize(
+        &rendered,
+        WIDTH,
+        HEIGHT,
+        image::imageops::FilterType::Lanczos3,
+    );
+
+    // Encode the downscaled image as PNG
+    let mut png = Vec::with_capacity((WIDTH * HEIGHT) as usize / 4);
     {
         use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
         PngEncoder::new(&mut png)
-            .write_image(&buffer, WIDTH, HEIGHT, ExtendedColorType::Rgb8)
+            .write_image(final_image.as_raw(), WIDTH, HEIGHT, ExtendedColorType::Rgb8)
             .context("failed to encode PNG")?;
     }
     Ok(png)
@@ -160,20 +205,23 @@ where
     let (y_lo, y_hi) = y_range(points.iter().map(|p| (p.min, p.max)));
 
     let mut chart = ChartBuilder::on(area)
-        .caption(caption, ("sans-serif", 18, FontStyle::Bold).into_font())
-        .margin(10)
-        .x_label_area_size(36)
-        .y_label_area_size(50)
+        .caption(
+            caption,
+            ("sans-serif", CAPTION_FONT_SIZE, FontStyle::Bold).into_font(),
+        )
+        .margin(CHART_MARGIN)
+        .x_label_area_size(X_LABEL_AREA)
+        .y_label_area_size(Y_LABEL_AREA)
         .build_cartesian_2d(x_min..x_max, y_lo..y_hi)
         .map_err(|e| anyhow::anyhow!("failed to build chart '{caption}': {e}"))?;
 
     chart
         .configure_mesh()
-        .x_labels(6)
+        .x_labels(5)
         .x_label_formatter(&x_label_formatter)
-        .y_labels(6)
+        .y_labels(5)
         .y_label_formatter(&|v| format!("{v:.1}°C"))
-        .label_style(("sans-serif", 13).into_font())
+        .label_style(("sans-serif", LABEL_FONT_SIZE).into_font())
         .draw()
         .map_err(|e| anyhow::anyhow!("failed to draw mesh for '{caption}': {e}"))?;
 
@@ -188,7 +236,7 @@ where
     chart
         .draw_series(LineSeries::new(
             points.iter().map(|p| (p.x.clone(), p.avg)),
-            ShapeStyle::from(avg_color()).stroke_width(2),
+            ShapeStyle::from(avg_color()).stroke_width(LINE_WIDTH),
         ))
         .map_err(|e| anyhow::anyhow!("failed to draw line for '{caption}': {e}"))?;
 
@@ -201,15 +249,19 @@ where
     DB: DrawingBackend,
     DB::ErrorType: 'static,
 {
-    let (cap_area, body) = area.split_vertically(30);
+    let (cap_area, body) = area.split_vertically(40 * RENDER_SCALE as i32);
     cap_area
-        .titled(caption, ("sans-serif", 18, FontStyle::Bold).into_font())
+        .titled(
+            caption,
+            ("sans-serif", CAPTION_FONT_SIZE, FontStyle::Bold).into_font(),
+        )
         .map_err(|e| anyhow::anyhow!("failed to draw empty caption: {e}"))?;
     let (w, h) = body.dim_in_pixel();
     body.draw(&plotters::element::Text::new(
         "no data".to_string(),
-        (w as i32 / 2 - 30, h as i32 / 2),
-        TextStyle::from(("sans-serif", 16).into_font()).color(&plotters::style::BLACK.mix(0.6)),
+        (w as i32 / 2 - 40 * RENDER_SCALE as i32, h as i32 / 2),
+        TextStyle::from(("sans-serif", LABEL_FONT_SIZE).into_font())
+            .color(&plotters::style::BLACK.mix(0.6)),
     ))
     .map_err(|e| anyhow::anyhow!("failed to draw empty label: {e}"))?;
     Ok(())
