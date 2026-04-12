@@ -83,6 +83,13 @@ fn format_stats_text(
         )
         .unwrap();
     }
+    if let Some(max) = sensor.maximum_temperature {
+        write!(
+            out,
+            "\n\n_The highest temperature ever measured at this location was {max:.1}°C._"
+        )
+        .unwrap();
+    }
     out
 }
 
@@ -237,19 +244,21 @@ impl GfroerliHandler {
             Err(msg) => return Ok(Action::Respond(vec![Response::text(msg)])),
         };
 
-        // Fetch daily (last 30 days) and hourly (yesterday + today for the
-        // last 24h window) aggregates in parallel
+        // Fetch sensor details (for the all-time maximum), daily (last 30
+        // days) and hourly (yesterday + today for the last 24h window)
+        // aggregates in parallel
         let today = Utc::now().date_naive();
         let daily_from = today - TimeDelta::days(30);
         let hourly_from = today - TimeDelta::days(1);
+        let details_fut = self.client.sensor_details(sensor.id);
         let daily_fut = self
             .client
             .daily_temperatures(sensor.id, daily_from, today, 30);
         let hourly_fut = self
             .client
             .hourly_temperatures(sensor.id, hourly_from, today, 48);
-        let (daily, hourly) =
-            tokio::try_join!(daily_fut, hourly_fut).map_err(HandlerError::from)?;
+        let (sensor, daily, hourly) =
+            tokio::try_join!(details_fut, daily_fut, hourly_fut).map_err(HandlerError::from)?;
 
         // Convert aggregates into chart points (hourly filters to last 24h)
         let hourly_chart = hourly_points(&hourly);
@@ -391,6 +400,7 @@ mod tests {
             caption: None,
             latest_temperature: temp,
             latest_measurement_at: None,
+            maximum_temperature: None,
         }
     }
 
@@ -477,6 +487,7 @@ mod tests {
                 caption: None,
                 latest_temperature: temp,
                 latest_measurement_at: Some(Utc::now() - TimeDelta::hours(hours_ago)),
+                maximum_temperature: None,
             }
         }
 
@@ -504,6 +515,16 @@ mod tests {
                  \n\
                  _Over the last 30 days, the temperature ranged from 14.1°C to 22.4°C, averaging 18.7°C._",
             );
+        }
+
+        #[test]
+        fn with_all_time_maximum() {
+            let mut sensor = sensor_with_time(1, "Aare Bern", Some(18.3), 1);
+            sensor.maximum_temperature = Some(27.4);
+            let text = format_stats_text(&sensor, None, None);
+            assert!(text.ends_with(
+                "\n\n_The highest temperature ever measured at this location was 27.4°C._"
+            ));
         }
 
         #[test]

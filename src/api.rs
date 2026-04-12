@@ -39,6 +39,10 @@ pub struct Sensor {
     pub latest_temperature: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
     pub latest_measurement_at: Option<DateTime<Utc>>,
+    /// All-time highest temperature recorded at this sensor. Only populated
+    /// by the per-sensor detail endpoint; `None` in the list response.
+    #[serde(default)]
+    pub maximum_temperature: Option<f64>,
 }
 
 /// Deserialize an optional Unix timestamp (seconds) into `Option<DateTime<Utc>>`.
@@ -280,6 +284,27 @@ impl GfroerliClient {
         Ok(filter_sensors(sensors, query))
     }
 
+    /// Fetch full details for a single sensor, including the all-time
+    /// maximum temperature.
+    pub async fn sensor_details(&self, sensor_id: u32) -> anyhow::Result<Sensor> {
+        let endpoint = format!("/api/mobile_app/sensors/{sensor_id}");
+        let url = format!("{}{endpoint}", self.config.api_url);
+
+        let start = Instant::now();
+        let sensor: Sensor = self
+            .http
+            .get(&url)
+            .bearer_auth(&self.config.api_key)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        log_request_duration(&format!("GET {endpoint}"), start.elapsed());
+
+        Ok(sensor)
+    }
+
     /// Fetch daily temperature aggregates for a sensor over a date range.
     pub async fn daily_temperatures(
         &self,
@@ -363,6 +388,7 @@ mod tests {
             caption: None,
             latest_temperature: temp,
             latest_measurement_at: time,
+            maximum_temperature: None,
         }
     }
 
