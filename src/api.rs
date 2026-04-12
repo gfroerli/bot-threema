@@ -122,16 +122,31 @@ fn format_relative_time(time: DateTime<Utc>) -> String {
     }
 }
 
+/// Map a temperature to a semantic face emoji for the sensor list.
+///
+/// Buckets mirror the Android app's temperature thresholds.
+fn temperature_emoji(temp: Option<f64>) -> &'static str {
+    match temp {
+        None => "❓",
+        Some(t) if t < 10.0 => "🥶",
+        Some(t) if t <= 18.0 => "😨",
+        Some(t) if t <= 21.0 => "😌",
+        Some(t) if t <= 24.0 => "😎",
+        Some(_) => "🥵",
+    }
+}
+
 impl Sensor {
     /// Format sensor as a line in the sensor list.
     pub fn format_list_entry(&self) -> String {
+        let name = &self.device_name;
+        let id = self.id;
         match self.latest_temperature {
-            Some(temp) => format!(
-                "{} \u{2013} {temp:.1}°C (#{self_id})",
-                self.device_name,
-                self_id = self.id
-            ),
-            None => format!("{} (#{self_id})", self.device_name, self_id = self.id),
+            Some(temp) => {
+                let emoji = temperature_emoji(Some(temp));
+                format!("{name} (#{id}) \u{2013} {temp:.1}°C {emoji}")
+            }
+            None => format!("{name} (#{id})"),
         }
     }
 
@@ -140,11 +155,13 @@ impl Sensor {
         let name = &self.device_name;
         match (self.latest_temperature, self.latest_measurement_at) {
             (Some(temp), Some(time)) => {
+                let emoji = temperature_emoji(Some(temp));
                 let relative = format_relative_time(time);
-                format!("{name}: {temp:.1}°C ({relative})")
+                format!("{name}: {temp:.1}°C {emoji} ({relative})")
             }
             (Some(temp), None) => {
-                format!("{name}: {temp:.1}°C")
+                let emoji = temperature_emoji(Some(temp));
+                format!("{name}: {temp:.1}°C {emoji}")
             }
             _ => {
                 format!("{name}: no recent measurement available")
@@ -347,7 +364,7 @@ mod tests {
             let sensor = make_sensor(13, "Bennau, Alp", Some(34.5), None);
             assert_eq!(
                 sensor.format_list_entry(),
-                "Bennau, Alp \u{2013} 34.5°C (#13)"
+                "Bennau, Alp (#13) \u{2013} 34.5°C 🥵"
             );
         }
 
@@ -355,6 +372,33 @@ mod tests {
         fn without_temperature() {
             let sensor = make_sensor(42, "Aare Bern", None, None);
             assert_eq!(sensor.format_list_entry(), "Aare Bern (#42)");
+        }
+    }
+
+    mod temperature_emoji {
+        use super::*;
+
+        #[test]
+        fn unknown() {
+            assert_eq!(temperature_emoji(None), "❓");
+        }
+
+        #[rstest]
+        #[case(-5.0, "🥶")]
+        #[case(9.9, "🥶")]
+        #[case(10.0, "😨")]
+        #[case(15.0, "😨")]
+        #[case(18.0, "😨")]
+        #[case(18.1, "😌")]
+        #[case(20.0, "😌")]
+        #[case(21.0, "😌")]
+        #[case(21.1, "😎")]
+        #[case(23.0, "😎")]
+        #[case(24.0, "😎")]
+        #[case(24.1, "🥵")]
+        #[case(30.0, "🥵")]
+        fn buckets(#[case] temp: f64, #[case] expected: &str) {
+            assert_eq!(temperature_emoji(Some(temp)), expected);
         }
     }
 
@@ -367,7 +411,7 @@ mod tests {
             let sensor = make_sensor(1, "Aare Bern", Some(18.3), Some(time));
             assert_eq!(
                 sensor.format_temperature(),
-                "Aare Bern: 18.3°C (2 hours ago)"
+                "Aare Bern: 18.3°C 😌 (2 hours ago)"
             );
         }
 

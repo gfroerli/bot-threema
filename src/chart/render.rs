@@ -57,7 +57,7 @@ pub fn render_sensor_charts(
             body_area.split_vertically(body_height - FOOTER_AREA_HEIGHT);
         let (top, bottom) = charts_area.split_vertically((50).percent());
 
-        draw_temperature_chart(&top, "Last 24 hours", hourly, 7, |dt: &DateTime<Tz>| {
+        draw_temperature_chart(&top, "Last 24 hours", hourly, 12, |dt: &DateTime<Tz>| {
             dt.format("%H:%M").to_string()
         })?;
         draw_temperature_chart(&bottom, "Last 30 days", daily, 5, |d: &DateTime<Tz>| {
