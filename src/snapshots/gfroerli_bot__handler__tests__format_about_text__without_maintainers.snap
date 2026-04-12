@@ -1,0 +1,9 @@
+---
+source: src/handler.rs
+expression: "format_about_text(&[])"
+---
+Gfrörli is a community project that measures water temperatures in Swiss water bodies.
+
+Website: https://gfrör.li/
+
+This bot allows you to quickly check current water temperatures directly from your phone. Use /sensors to see all available measurement stations, or /temp to get the latest reading for a specific sensor.

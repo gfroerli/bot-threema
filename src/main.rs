@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
     let config_path = parse_args()?;
     let app_config = AppConfig::load(config_path.as_deref())?;
-    let (bot_config, gfroerli_config) = app_config.split();
+    let (bot_config, bot_settings, gfroerli_config) = app_config.split();
 
     info!(
         "Starting Gfrörli bot on {}:{}",
@@ -41,7 +41,7 @@ async fn main() -> Result<()> {
         .validate_api_key()
         .await
         .context("Gfrörli API key validation failed")?;
-    let handler = GfroerliHandler::new(client);
+    let handler = GfroerliHandler::new(client, bot_settings.maintainer_ids);
 
     BotServer::new(bot_config, handler)?.run().await?;
 

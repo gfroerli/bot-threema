@@ -10,6 +10,10 @@ private_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 # Can also be specified through GFROERLI_BOT__THREEMA__API_SECRET env var
 api_secret = "your-api-secret"
 
+[bot]
+# Threema IDs of bot maintainers, shown as contact links in the /about message.
+maintainer_ids = ["AAAABBBB"]
+
 [gfroerli]
 api_url = "https://api.gfrör.li"
 api_key = "your-api-key"

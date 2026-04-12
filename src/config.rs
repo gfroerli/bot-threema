@@ -1,12 +1,13 @@
 use std::path::Path;
 
 use serde::Deserialize;
+use threema_gateway::ThreemaId;
 use threema_gateway_bot::config::{BotConfig, RateLimitingConfig, ServerConfig, ThreemaConfig};
 
 /// Top-level application configuration.
 ///
-/// Embeds the standard [`BotConfig`] sections and adds a custom `[gfroerli]` section for
-/// the Gfrörli API credentials.
+/// Embeds the standard [`BotConfig`] sections and adds custom `[bot]` and `[gfroerli]`
+/// sections for bot-specific settings and the Gfrörli API credentials.
 #[derive(Deserialize)]
 pub struct AppConfig {
     server: ServerConfig,
@@ -14,6 +15,16 @@ pub struct AppConfig {
     #[serde(default)]
     rate_limiting: RateLimitingConfig,
     pub gfroerli: GfroerliConfig,
+    #[serde(default)]
+    pub bot: BotSettings,
+}
+
+/// Bot-specific settings (separate from the transport-level [`BotConfig`]).
+#[derive(Deserialize, Default)]
+pub struct BotSettings {
+    /// Threema IDs of bot maintainers, shown in the `/about` message as contact links.
+    #[serde(default)]
+    pub maintainer_ids: Vec<ThreemaId>,
 }
 
 /// Configuration for the Gfrörli REST API.
@@ -50,13 +61,14 @@ impl AppConfig {
         Ok(config)
     }
 
-    /// Split into [`BotConfig`] (for [`BotServer`](threema_gateway_bot::server::BotServer)) and [`GfroerliConfig`].
-    pub fn split(self) -> (BotConfig, GfroerliConfig) {
+    /// Split into [`BotConfig`] (for [`BotServer`](threema_gateway_bot::server::BotServer)),
+    /// [`BotSettings`], and [`GfroerliConfig`].
+    pub fn split(self) -> (BotConfig, BotSettings, GfroerliConfig) {
         let bot_config = BotConfig {
             server: self.server,
             threema: self.threema,
             rate_limiting: self.rate_limiting,
         };
-        (bot_config, self.gfroerli)
+        (bot_config, self.bot, self.gfroerli)
     }
 }

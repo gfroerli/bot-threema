@@ -850,6 +850,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "threema-gateway",
  "threema-gateway-bot",
  "tokio",
  "tracing",

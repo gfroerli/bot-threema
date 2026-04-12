@@ -2,6 +2,7 @@ use std::{fmt::Write, sync::Arc};
 
 use async_trait::async_trait;
 use chrono::{TimeDelta, Utc};
+use threema_gateway::ThreemaId;
 use threema_gateway_bot::{
     commands::{CommandStyle, Commands},
     server::handler::{
@@ -147,11 +148,15 @@ fn hourly_points(hourly: &[HourlyTemperature]) -> Vec<HourlyPoint> {
 /// Threema bot handler for the Gfrörli water temperature service.
 pub struct GfroerliHandler {
     client: Arc<GfroerliClient>,
+    maintainer_ids: Vec<ThreemaId>,
 }
 
 impl GfroerliHandler {
-    pub fn new(client: Arc<GfroerliClient>) -> Self {
-        Self { client }
+    pub fn new(client: Arc<GfroerliClient>, maintainer_ids: Vec<ThreemaId>) -> Self {
+        Self {
+            client,
+            maintainer_ids,
+        }
     }
 
     /// Handle `/sensors`: list all available sensors.
@@ -251,15 +256,38 @@ impl GfroerliHandler {
     }
 
     /// Handle `/about`: show information about the Gfrörli project.
-    fn handle_about() -> Action {
-        Action::Respond(vec![Response::text(
-            "Gfrörli is a community project that measures water temperatures in Swiss water bodies.\n\n\
-             Website: https://gfrör.li/\n\n\
-             This bot allows you to quickly check current water temperatures directly from your phone. \
-             Use /sensors to see all available measurement stations, or /temp to get the latest reading \
-             for a specific sensor.",
-        )])
+    fn handle_about(&self) -> Action {
+        Action::Respond(vec![Response::text(format_about_text(
+            &self.maintainer_ids,
+        ))])
     }
+}
+
+/// Build the text shown in response to `/about`.
+///
+/// Appends a maintainer contact section if `maintainer_ids` is non-empty; multiple
+/// IDs are joined with ` or `.
+fn format_about_text(maintainer_ids: &[ThreemaId]) -> String {
+    let mut text = String::from(
+        "Gfrörli is a community project that measures water temperatures in Swiss water bodies.\n\n\
+         Website: https://gfrör.li/\n\n\
+         This bot allows you to quickly check current water temperatures directly from your phone. \
+         Use /sensors to see all available measurement stations, or /temp to get the latest reading \
+         for a specific sensor.",
+    );
+    if !maintainer_ids.is_empty() {
+        let links = maintainer_ids
+            .iter()
+            .map(|id| format!("https://threema.id/{id}"))
+            .collect::<Vec<_>>()
+            .join(" or ");
+        write!(
+            text,
+            "\n\nIf you have any question about this bot, please feel free to contact {links}"
+        )
+        .unwrap();
+    }
+    text
 }
 
 #[async_trait]
@@ -303,7 +331,7 @@ impl MessageHandler for GfroerliHandler {
             "sensors" => self.handle_sensors(typing).await,
             "temp" => self.handle_temp(args, typing).await,
             "details" => self.handle_details(args, typing).await,
-            "about" => Ok(Self::handle_about()),
+            "about" => Ok(self.handle_about()),
             _ => Ok(Action::ShowHelp { prelude: None }),
         }
     }
@@ -313,20 +341,26 @@ impl MessageHandler for GfroerliHandler {
 mod tests {
     use super::*;
 
-    mod handle_about {
+    mod format_about_text {
         use super::*;
 
         #[test]
-        fn returns_project_info() {
-            let action = GfroerliHandler::handle_about();
-            let Action::Respond(responses) = action else {
-                panic!("expected Action::Respond");
-            };
-            assert_eq!(responses.len(), 1);
-            let Response::Text(text) = &responses[0] else {
-                panic!("expected Response::Text");
-            };
-            insta::assert_snapshot!(text);
+        fn without_maintainers() {
+            insta::assert_snapshot!(format_about_text(&[]));
+        }
+
+        #[test]
+        fn with_single_maintainer() {
+            insta::assert_snapshot!(format_about_text(&["AAAABBBB".try_into().unwrap()]));
+        }
+
+        #[test]
+        fn with_multiple_maintainers() {
+            insta::assert_snapshot!(format_about_text(&[
+                "AAAABBBB".try_into().unwrap(),
+                "CCCCDDDD".try_into().unwrap(),
+                "EEEEFFFF".try_into().unwrap(),
+            ]));
         }
     }
 
