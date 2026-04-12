@@ -25,7 +25,7 @@ fn log_request_duration(endpoint: &str, elapsed: Duration) {
     if elapsed >= SLOW_REQUEST_THRESHOLD {
         warn!("{endpoint} completed in {elapsed:.1?}");
     } else {
-        trace!("{endpoint} completed in {elapsed:.1?}");
+        debug!("{endpoint} completed in {elapsed:.1?}");
     }
 }
 
@@ -135,7 +135,9 @@ impl GfroerliClient {
     ///
     /// Should be called once at startup to fail early if the key is invalid.
     pub async fn validate_api_key(&self) -> anyhow::Result<()> {
-        let url = format!("{}/api/sensors", self.config.api_url);
+        let endpoint = "/api/sponsors";
+        let url = format!("{}{endpoint}", self.config.api_url);
+
         let start = Instant::now();
         let response = self
             .http
@@ -143,14 +145,17 @@ impl GfroerliClient {
             .bearer_auth(&self.config.api_key)
             .send()
             .await?;
-        log_request_duration("HEAD /api/sensors", start.elapsed());
+        log_request_duration(&format!("HEAD {endpoint}"), start.elapsed());
+
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             anyhow::bail!(
                 "Gfrörli API key is invalid (401 Unauthorized). \
                  Check the api_key in your config or GFROERLI_BOT__GFROERLI__API_KEY env var."
             );
         }
+
         response.error_for_status()?;
+
         Ok(())
     }
 
