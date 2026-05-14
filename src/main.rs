@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
-use gfroerli_bot::{api::GfroerliClient, config::AppConfig, handler::GfroerliHandler};
+use gfroerli_bot_threema::{api::GfroerliClient, config::AppConfig, handler::GfroerliHandler};
 use threema_gateway_bot::server::BotServer;
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt};

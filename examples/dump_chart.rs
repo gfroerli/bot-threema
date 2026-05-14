@@ -18,7 +18,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use chrono::{TimeDelta, TimeZone};
-use gfroerli_bot::chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint};
+use gfroerli_bot_threema::chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint};
 
 /// A full scenario: two data series driving the two charts.
 struct Scenario {

@@ -1,0 +1,6 @@
+.devcontainer/
+.git/
+.github/
+target/
+vendor/
+config.toml
