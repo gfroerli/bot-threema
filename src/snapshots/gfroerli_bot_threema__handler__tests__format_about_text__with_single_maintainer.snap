@@ -1,6 +1,6 @@
 ---
 source: src/handler.rs
-expression: "format_about_text(&[\"AAAABBBB\".to_string()])"
+expression: "format_about_text(&[\"AAAABBBB\".try_into().unwrap()])"
 ---
 Gfrörli is a community project that measures water temperatures in Swiss water bodies.
 
