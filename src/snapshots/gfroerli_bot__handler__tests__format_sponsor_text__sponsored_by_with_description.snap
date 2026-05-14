@@ -2,6 +2,6 @@
 source: src/handler.rs
 expression: "format_sponsor_text(&sensor, &sponsor)"
 ---
-The sensor "Aare Bern" is sponsored by "Threema":
+The sensor "Aare Bern" is sponsored by *Threema*:
 
 _Secure messaging from Switzerland _
