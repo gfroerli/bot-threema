@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
       - name: Build Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           push: false
           cache-from: type=gha
@@ -43,7 +43,7 @@ jobs:
             type=raw,value=latest
             type=ref,event=branch
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
