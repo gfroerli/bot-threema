@@ -20,6 +20,7 @@ fn parse_args() -> Result<Option<PathBuf>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Set up logging
     fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
@@ -27,15 +28,16 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    // Load config
     let config_path = parse_args()?;
     let app_config = AppConfig::load(config_path.as_deref())?;
     let (bot_config, bot_settings, gfroerli_config) = app_config.split();
-
     info!(
         "Starting Gfrörli bot on {}:{}",
         bot_config.server.host, bot_config.server.port
     );
 
+    // Prepare client and handler
     let client = Arc::new(GfroerliClient::new(gfroerli_config));
     client
         .validate_api_key()
@@ -43,6 +45,7 @@ async fn main() -> Result<()> {
         .context("Gfrörli API key validation failed")?;
     let handler = GfroerliHandler::new(client, bot_settings.maintainer_ids);
 
+    // Run bot server
     BotServer::new(bot_config, handler)?.run().await?;
 
     Ok(())
