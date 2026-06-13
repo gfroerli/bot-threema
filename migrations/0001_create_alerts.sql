@@ -1,10 +1,10 @@
--- Swimming-temperature alert subscriptions.
+-- Swimming-temperature alerts.
 --
--- One row per (user, sensor) pair. Each row also carries the alert state machine: a subscription is
+-- One row per (user, sensor) pair. Each row also carries the alert state machine: an alert is
 -- `watching` until its sensor's afternoon average crosses the threshold on two consecutive days, at
 -- which point it `notifies` the user and becomes `notified`; it resets to `watching` after the
 -- average stays clearly below the threshold for three consecutive days.
-CREATE TABLE subscriptions (
+CREATE TABLE alerts (
     uid            INTEGER PRIMARY KEY,
     threema_id     TEXT    NOT NULL CHECK (length(threema_id) = 8),
     sensor_id      INTEGER NOT NULL,

@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: "format_alert_removed(\"Aare\")"
+---
+🔕 Removed your alert for *Aare*.

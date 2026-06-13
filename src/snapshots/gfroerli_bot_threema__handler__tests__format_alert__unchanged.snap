@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: "format_alert_unchanged(\"Aare\", 20.0)"
+---
+You already have an alert for *Aare* at 20.0°C. Send a different temperature to change it, or /unalert Aare to remove it.

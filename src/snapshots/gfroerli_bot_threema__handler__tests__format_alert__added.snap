@@ -1,0 +1,9 @@
+---
+source: src/handler.rs
+expression: "format_alert_added(\"Aare\", 20.0)"
+---
+🔔 Alert set for *Aare*. I'll message you once the average afternoon water temperature reaches *20.0°C* two days in a row.
+
+See your alerts with /alerts, or remove this one with /unalert Aare.
+
+_To do this I store your Threema ID; removing the alert deletes it again._

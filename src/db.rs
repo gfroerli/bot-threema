@@ -1,7 +1,7 @@
 //! SQLite database handling: Connection pooling and migrations.
 //!
 //! [`Database`] owns the connection pool and applies the embedded migrations in `migrations/`.
-//! Domain-specific query layers (e.g. [`SubscriptionStore`](crate::store::SubscriptionStore))
+//! Domain-specific query layers (e.g. [`AlertStore`](crate::store::AlertStore))
 //! borrow its pool rather than each managing their own connection, so connection and schema
 //! handling stays in one place as more tables are added.
 
@@ -73,8 +73,8 @@ mod tests {
         #[tokio::test]
         async fn applies_migrations_to_empty_database() {
             let db = Database::connect_in_memory().await;
-            // The `subscriptions` table from the migrations must exist and be empty.
-            let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM subscriptions")
+            // The `alerts` table from the migrations must exist and be empty.
+            let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM alerts")
                 .fetch_one(db.pool())
                 .await
                 .unwrap();

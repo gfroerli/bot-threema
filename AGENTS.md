@@ -31,6 +31,7 @@ Other:
 - Lint code with `cargo clippy`
 - At the end, when everything else works fine, ALWAYS format code with rustfmt through `cargo fmt`
 - NEVER use `unsafe` unless it is absolutely required to do so. If you think it is required, ALWAYS ask the developer for permission, along with a rationale.
+- Type safety is great, use it to make illegal state unrepresentable and to enforce business logic
 
 ### Database
 

@@ -9,8 +9,15 @@ A Threema bot for querying water temperatures from the [Gfrörli](https://gfrör
 - `/stats <query>` — Show stats and charts for a sensor (by name or ID)
 - `/sponsors` — List all project sponsors
 - `/sponsor <query>` — Show the sponsor for a sensor (by name or ID)
+- `/alert <query> <temperature>` — Get notified once a sensor's afternoon water temperature reaches the given threshold (°C)
+- `/alerts` — List your active alerts
+- `/unalert <query>` — Remove an alert (or `/unalert all` to remove every alert)
 - `/about` — About the Gfrörli project
 - `/help` — Show available commands
+
+Creating an alert stores your Threema ID so the bot can message you; removing the alert (`/unalert
+<query>`, or `/unalert all`) deletes it again. Alerts are persisted in a SQLite database (see the
+`[database]` section in `config.toml`).
 
 ## Configuration
 
