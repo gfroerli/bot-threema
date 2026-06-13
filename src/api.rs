@@ -59,10 +59,24 @@ pub struct Sensor {
     pub maximum_temperature: Option<f64>,
 }
 
+/// Identifier of a Gfrörli sponsor.
+///
+/// A transparent newtype over the raw `u32` id so sponsor ids can't be confused with sensor ids or
+/// other integers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(transparent)]
+pub struct SponsorId(pub u32);
+
+impl fmt::Display for SponsorId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A sponsor of the Gfrörli project.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Sponsor {
-    pub id: u32,
+    pub id: SponsorId,
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
@@ -527,7 +541,7 @@ mod tests {
         sensor_ids: Vec<u32>,
     ) -> Sponsor {
         Sponsor {
-            id,
+            id: SponsorId(id),
             name: name.to_string(),
             description: None,
             sponsor_type,
@@ -805,7 +819,7 @@ mod tests {
                 "created_at": "2024-01-15T10:30:00Z"
             }"#;
             let sponsor: Sponsor = serde_json::from_str(json).unwrap();
-            assert_eq!(sponsor.id, 1);
+            assert_eq!(sponsor.id, SponsorId(1));
             assert_eq!(sponsor.name, "Threema");
             assert_eq!(sponsor.description.as_deref(), Some("Secure messaging"));
             assert_eq!(sponsor.sponsor_type, SponsorType::Sponsor);

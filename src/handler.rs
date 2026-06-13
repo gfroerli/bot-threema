@@ -474,7 +474,7 @@ impl MessageHandler for GfroerliHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::{SensorId, SponsorType};
+    use crate::api::{SensorId, SponsorId, SponsorType};
 
     use super::*;
 
@@ -514,7 +514,7 @@ mod tests {
 
     fn make_sponsor(name: &str, description: Option<&str>, sponsor_type: SponsorType) -> Sponsor {
         Sponsor {
-            id: 1,
+            id: SponsorId(1),
             name: name.to_string(),
             description: description.map(str::to_string),
             sponsor_type,
