@@ -17,6 +17,8 @@ pub struct AppConfig {
     pub gfroerli: GfroerliConfig,
     #[serde(default)]
     pub bot: BotSettings,
+    #[serde(default)]
+    pub database: DatabaseConfig,
 }
 
 /// Bot-specific settings (separate from the transport-level [`BotConfig`]).
@@ -25,6 +27,26 @@ pub struct BotSettings {
     /// Threema IDs of bot maintainers, shown in the `/about` message as contact links.
     #[serde(default)]
     pub maintainer_ids: Vec<ThreemaId>,
+}
+
+/// Configuration for the SQLite database.
+#[derive(Deserialize)]
+pub struct DatabaseConfig {
+    /// Path to the SQLite database file.
+    #[serde(default = "default_database_path")]
+    pub path: String,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            path: default_database_path(),
+        }
+    }
+}
+
+fn default_database_path() -> String {
+    "gfroerli-bot.sqlite".to_owned()
 }
 
 /// Configuration for the Gfrörli REST API.
@@ -62,13 +84,13 @@ impl AppConfig {
     }
 
     /// Split into [`BotConfig`] (for [`BotServer`](threema_gateway_bot::server::BotServer)),
-    /// [`BotSettings`], and [`GfroerliConfig`].
-    pub fn split(self) -> (BotConfig, BotSettings, GfroerliConfig) {
+    /// [`BotSettings`], [`GfroerliConfig`], and [`DatabaseConfig`].
+    pub fn split(self) -> (BotConfig, BotSettings, GfroerliConfig, DatabaseConfig) {
         let bot_config = BotConfig {
             server: self.server,
             threema: self.threema,
             rate_limiting: self.rate_limiting,
         };
-        (bot_config, self.bot, self.gfroerli)
+        (bot_config, self.bot, self.gfroerli, self.database)
     }
 }

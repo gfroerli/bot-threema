@@ -31,3 +31,8 @@ Other:
 - Lint code with `cargo clippy`
 - At the end, when everything else works fine, ALWAYS format code with rustfmt through `cargo fmt`
 - NEVER use `unsafe` unless it is absolutely required to do so. If you think it is required, ALWAYS ask the developer for permission, along with a rationale.
+
+### Database
+
+- Use `uid` column name for the primary key
+- Add a `uid` field to every SQLite table - it's there in the background anyways

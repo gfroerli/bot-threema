@@ -1,7 +1,10 @@
 use std::{env, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
-use gfroerli_bot_threema::{api::GfroerliClient, config::AppConfig, handler::GfroerliHandler};
+use gfroerli_bot_threema::{
+    api::GfroerliClient, config::AppConfig, db::Database, handler::GfroerliHandler,
+    store::SubscriptionStore,
+};
 use threema_gateway_bot::server::BotServer;
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt};
@@ -31,11 +34,18 @@ async fn main() -> Result<()> {
     // Load config
     let config_path = parse_args()?;
     let app_config = AppConfig::load(config_path.as_deref())?;
-    let (bot_config, bot_settings, gfroerli_config) = app_config.split();
+    let (bot_config, bot_settings, gfroerli_config, database_config) = app_config.split();
     info!(
         "Starting Gfrörli bot on {}:{}",
         bot_config.server.host, bot_config.server.port
     );
+
+    // Open (and migrate) the database, then build the subscription store on top of it
+    let database = Database::connect(&database_config.path)
+        .await
+        .context("opening database")?;
+    let store = SubscriptionStore::new(&database);
+    info!("Alert subscriptions: {} active", store.count().await?);
 
     // Prepare client and handler
     let client = Arc::new(GfroerliClient::new(gfroerli_config));
