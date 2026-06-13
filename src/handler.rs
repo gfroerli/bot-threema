@@ -418,20 +418,26 @@ fn format_about_text(maintainer_ids: &[ThreemaId]) -> String {
 #[async_trait]
 impl MessageHandler for GfroerliHandler {
     fn description(&self) -> Option<&str> {
-        Some("Gfrörli Bot: Check water temperatures in Swiss water bodies.")
+        Some("🥶🤖 *Gfrörli Bot:* Check water temperatures in Swiss water bodies.")
     }
 
     fn commands() -> Commands {
         Commands::new()
             .style(CommandStyle::Slash)
-            .register("sensors", "List all available sensors")
-            .register("temp", "Get current temperature (e.g. /temp Aare)")
-            .register(
-                "stats",
-                "Show stats and charts for a sensor (e.g. /stats Aare)",
-            )
-            .register("sponsors", "List all project sponsors")
-            .register("sponsor", "Show sponsor for a sensor (e.g. /sponsor Aare)")
+            .group("sensor", "Sensor Commands", |group| {
+                group
+                    .register("sensors", "List all available sensors")
+                    .register("temp", "Get current temperature (e.g. /temp Aare)")
+                    .register(
+                        "stats",
+                        "Show stats and charts for a sensor (e.g. /stats Aare)",
+                    )
+            })
+            .group("sponsor", "Sponsor Commands", |group| {
+                group
+                    .register("sponsors", "List all project sponsors")
+                    .register("sponsor", "Show sponsor for a sensor (e.g. /sponsor Aare)")
+            })
             .register("about", "About the Gfrörli project")
     }
 
