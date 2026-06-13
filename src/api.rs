@@ -1,5 +1,5 @@
 use std::{
-    fmt::Write,
+    fmt::{self, Write},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -29,10 +29,24 @@ fn log_request_duration(endpoint: &str, elapsed: Duration) {
     }
 }
 
+/// Identifier of a Gfrörli sensor.
+///
+/// A transparent newtype over the raw `u32` id so sensor ids can't be confused with other integers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, sqlx::Type)]
+#[serde(transparent)]
+#[sqlx(transparent)]
+pub struct SensorId(pub u32);
+
+impl fmt::Display for SensorId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A sensor as returned by the Gfrörli API.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Sensor {
-    pub id: u32,
+    pub id: SensorId,
     pub device_name: String,
     #[serde(default)]
     pub caption: Option<String>,
@@ -58,7 +72,7 @@ pub struct Sponsor {
     /// IDs of the sensors backed by this sponsor. Populated by the
     /// `/api/sponsors` index; not returned by the mobile_app sponsor endpoint.
     #[serde(default)]
-    pub sensor_ids: Vec<u32>,
+    pub sensor_ids: Vec<SensorId>,
 }
 
 /// The relationship a sponsor has to the project.
@@ -121,6 +135,7 @@ pub struct HourlyTemperature {
 fn filter_sensors(sensors: Vec<Sensor>, query: &str) -> Vec<Sensor> {
     // Try parsing as sensor ID first
     if let Ok(id) = query.parse::<u32>() {
+        let id = SensorId(id);
         return sensors.into_iter().filter(|s| s.id == id).collect();
     }
 
@@ -356,7 +371,7 @@ impl GfroerliClient {
 
     /// Fetch full details for a single sensor, including the all-time
     /// maximum temperature.
-    pub async fn sensor_details(&self, sensor_id: u32) -> anyhow::Result<Sensor> {
+    pub async fn sensor_details(&self, sensor_id: SensorId) -> anyhow::Result<Sensor> {
         let endpoint = format!("/api/mobile_app/sensors/{sensor_id}");
         let url = format!("{}{endpoint}", self.config.api_url);
 
@@ -397,7 +412,7 @@ impl GfroerliClient {
 
     /// Fetch the sponsor associated with a given sensor, if any. Returns
     /// `Ok(None)` if the sensor has no sponsor (HTTP 404).
-    pub async fn sensor_sponsor(&self, sensor_id: u32) -> anyhow::Result<Option<Sponsor>> {
+    pub async fn sensor_sponsor(&self, sensor_id: SensorId) -> anyhow::Result<Option<Sponsor>> {
         let endpoint = format!("/api/mobile_app/sensors/{sensor_id}/sponsor");
         let url = format!("{}{endpoint}", self.config.api_url);
 
@@ -420,7 +435,7 @@ impl GfroerliClient {
     /// Fetch daily temperature aggregates for a sensor over a date range.
     pub async fn daily_temperatures(
         &self,
-        sensor_id: u32,
+        sensor_id: SensorId,
         from: NaiveDate,
         to: NaiveDate,
         limit: u32,
@@ -451,7 +466,7 @@ impl GfroerliClient {
     /// Fetch hourly temperature aggregates for a sensor over a date range.
     pub async fn hourly_temperatures(
         &self,
-        sensor_id: u32,
+        sensor_id: SensorId,
         from: NaiveDate,
         to: NaiveDate,
         limit: u32,
@@ -495,7 +510,7 @@ mod tests {
 
     fn make_sensor(id: u32, name: &str, temp: Option<f64>, time: Option<DateTime<Utc>>) -> Sensor {
         Sensor {
-            id,
+            id: SensorId(id),
             device_name: name.to_string(),
             caption: None,
             latest_temperature: temp,
@@ -517,7 +532,7 @@ mod tests {
             description: None,
             sponsor_type,
             created_at,
-            sensor_ids,
+            sensor_ids: sensor_ids.into_iter().map(SensorId).collect(),
         }
     }
 
@@ -626,7 +641,7 @@ mod tests {
         fn valid_timestamp() {
             let json = r#"{"id": 1, "device_name": "Aare Bern", "latest_temperature": 18.3, "latest_measurement_at": 1752589800}"#;
             let sensor: Sensor = serde_json::from_str(json).unwrap();
-            assert_eq!(sensor.id, 1);
+            assert_eq!(sensor.id, SensorId(1));
             assert_eq!(sensor.device_name, "Aare Bern");
             assert_eq!(sensor.latest_temperature, Some(18.3));
             assert_eq!(
@@ -655,7 +670,7 @@ mod tests {
         fn ignores_unknown_fields() {
             let json = r#"{"id": 1, "device_name": "Aare Bern", "caption": "Some caption", "extra": true}"#;
             let sensor: Sensor = serde_json::from_str(json).unwrap();
-            assert_eq!(sensor.id, 1);
+            assert_eq!(sensor.id, SensorId(1));
         }
     }
 
@@ -715,7 +730,7 @@ mod tests {
         fn by_id() {
             let matches = filter_sensors(sample_sensors(), "2");
             assert_eq!(matches.len(), 1);
-            assert_eq!(matches[0].id, 2);
+            assert_eq!(matches[0].id, SensorId(2));
         }
 
         #[test]
@@ -754,7 +769,7 @@ mod tests {
             ];
             let matches = filter_sensors(sensors, "42");
             assert_eq!(matches.len(), 1);
-            assert_eq!(matches[0].id, 42);
+            assert_eq!(matches[0].id, SensorId(42));
         }
     }
 

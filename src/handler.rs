@@ -474,7 +474,7 @@ impl MessageHandler for GfroerliHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::SponsorType;
+    use crate::api::{SensorId, SponsorType};
 
     use super::*;
 
@@ -503,7 +503,7 @@ mod tests {
 
     fn make_sensor(id: u32, name: &str, temp: Option<f64>) -> Sensor {
         Sensor {
-            id,
+            id: SensorId(id),
             device_name: name.to_string(),
             caption: None,
             latest_temperature: temp,
@@ -594,7 +594,7 @@ mod tests {
         fn single_match() {
             let sensors = vec![make_sensor(1, "Aare Bern", Some(18.3))];
             let sensor = resolve_single_sensor("Aare", sensors, "/temp 1").unwrap();
-            assert_eq!(sensor.id, 1);
+            assert_eq!(sensor.id, SensorId(1));
         }
 
         #[test]
@@ -659,7 +659,7 @@ mod tests {
 
         fn sensor_with_time(id: u32, name: &str, temp: Option<f64>, hours_ago: i64) -> Sensor {
             Sensor {
-                id,
+                id: SensorId(id),
                 device_name: name.to_string(),
                 caption: None,
                 latest_temperature: temp,

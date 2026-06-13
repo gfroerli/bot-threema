@@ -10,7 +10,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::SqlitePool;
 use threema_gateway::ThreemaId;
 
-use crate::db::Database;
+use crate::{api::SensorId, db::Database};
 
 /// Columns of the `subscriptions` table, in the order [`Subscription`] expects them.
 const SUBSCRIPTION_COLUMNS: &str = "uid, threema_id, sensor_id, threshold, status, warm_streak, cold_streak, last_eval_date, created_at";
@@ -49,7 +49,7 @@ pub struct Subscription {
     /// Subscriber's Threema ID (always 8 characters).
     pub threema_id: String,
     /// Gfrörli sensor this subscription watches.
-    pub sensor_id: u32,
+    pub sensor_id: SensorId,
     /// Temperature threshold in °C.
     pub threshold: f64,
     /// Alert lifecycle state.
@@ -96,7 +96,7 @@ impl SubscriptionStore {
     pub async fn add(
         &self,
         threema_id: ThreemaId,
-        sensor_id: u32,
+        sensor_id: SensorId,
         threshold: f64,
     ) -> Result<Subscription> {
         let created_at = Utc::now().timestamp();
@@ -127,7 +127,7 @@ impl SubscriptionStore {
     }
 
     /// Delete a subscription, returning whether a row was removed.
-    pub async fn remove(&self, threema_id: ThreemaId, sensor_id: u32) -> Result<bool> {
+    pub async fn remove(&self, threema_id: ThreemaId, sensor_id: SensorId) -> Result<bool> {
         let affected =
             sqlx::query("DELETE FROM subscriptions WHERE threema_id = ? AND sensor_id = ?")
                 .bind(threema_id.as_str())
@@ -140,7 +140,11 @@ impl SubscriptionStore {
     }
 
     /// Fetch a single subscription by user and sensor.
-    pub async fn get(&self, threema_id: ThreemaId, sensor_id: u32) -> Result<Option<Subscription>> {
+    pub async fn get(
+        &self,
+        threema_id: ThreemaId,
+        sensor_id: SensorId,
+    ) -> Result<Option<Subscription>> {
         let sql = format!(
             "SELECT {SUBSCRIPTION_COLUMNS} FROM subscriptions WHERE threema_id = ? AND sensor_id = ?"
         );
@@ -238,16 +242,20 @@ mod tests {
         #[tokio::test]
         async fn round_trips_all_fields() {
             let store = memory_store().await;
-            let created = store.add(tid("ABCD1234"), 7, 23.0).await.unwrap();
+            let created = store.add(tid("ABCD1234"), SensorId(7), 23.0).await.unwrap();
             assert_eq!(created.threema_id, "ABCD1234");
-            assert_eq!(created.sensor_id, 7);
+            assert_eq!(created.sensor_id, SensorId(7));
             assert_eq!(created.threshold, 23.0);
             assert_eq!(created.status, SubscriptionStatus::Watching);
             assert_eq!(created.warm_streak, 0);
             assert_eq!(created.cold_streak, 0);
             assert!(created.last_eval_date.is_none());
 
-            let fetched = store.get(tid("ABCD1234"), 7).await.unwrap().unwrap();
+            let fetched = store
+                .get(tid("ABCD1234"), SensorId(7))
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(fetched.uid, created.uid);
             assert_eq!(fetched.threema_id, "ABCD1234");
             assert_eq!(fetched.threshold, 23.0);
@@ -260,10 +268,10 @@ mod tests {
         #[tokio::test]
         async fn rejects_duplicate_but_allows_other_sensor_or_user() {
             let store = memory_store().await;
-            store.add(tid("ABCD1234"), 7, 23.0).await.unwrap();
-            assert!(store.add(tid("ABCD1234"), 7, 24.0).await.is_err());
-            store.add(tid("ABCD1234"), 8, 23.0).await.unwrap();
-            store.add(tid("WXYZ5678"), 7, 23.0).await.unwrap();
+            store.add(tid("ABCD1234"), SensorId(7), 23.0).await.unwrap();
+            assert!(store.add(tid("ABCD1234"), SensorId(7), 24.0).await.is_err());
+            store.add(tid("ABCD1234"), SensorId(8), 23.0).await.unwrap();
+            store.add(tid("WXYZ5678"), SensorId(7), 23.0).await.unwrap();
             assert_eq!(store.count().await.unwrap(), 3);
         }
 
@@ -272,18 +280,24 @@ mod tests {
             let store = memory_store().await;
             assert!(
                 store
-                    .add(tid("ABCD1234"), 7, MIN_THRESHOLD - 0.1)
+                    .add(tid("ABCD1234"), SensorId(7), MIN_THRESHOLD - 0.1)
                     .await
                     .is_err()
             );
             assert!(
                 store
-                    .add(tid("ABCD1234"), 7, MAX_THRESHOLD + 0.1)
+                    .add(tid("ABCD1234"), SensorId(7), MAX_THRESHOLD + 0.1)
                     .await
                     .is_err()
             );
-            store.add(tid("ABCD1234"), 7, MIN_THRESHOLD).await.unwrap();
-            store.add(tid("ABCD1234"), 8, MAX_THRESHOLD).await.unwrap();
+            store
+                .add(tid("ABCD1234"), SensorId(7), MIN_THRESHOLD)
+                .await
+                .unwrap();
+            store
+                .add(tid("ABCD1234"), SensorId(8), MAX_THRESHOLD)
+                .await
+                .unwrap();
         }
     }
 
@@ -293,10 +307,16 @@ mod tests {
         #[tokio::test]
         async fn deletes_then_reports_absent() {
             let store = memory_store().await;
-            store.add(tid("ABCD1234"), 7, 23.0).await.unwrap();
-            assert!(store.remove(tid("ABCD1234"), 7).await.unwrap());
-            assert!(!store.remove(tid("ABCD1234"), 7).await.unwrap());
-            assert!(store.get(tid("ABCD1234"), 7).await.unwrap().is_none());
+            store.add(tid("ABCD1234"), SensorId(7), 23.0).await.unwrap();
+            assert!(store.remove(tid("ABCD1234"), SensorId(7)).await.unwrap());
+            assert!(!store.remove(tid("ABCD1234"), SensorId(7)).await.unwrap());
+            assert!(
+                store
+                    .get(tid("ABCD1234"), SensorId(7))
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
         }
     }
 
@@ -306,7 +326,7 @@ mod tests {
         #[tokio::test]
         async fn persists_status_streaks_and_date() {
             let store = memory_store().await;
-            let sub = store.add(tid("ABCD1234"), 7, 23.0).await.unwrap();
+            let sub = store.add(tid("ABCD1234"), SensorId(7), 23.0).await.unwrap();
             let date = NaiveDate::from_ymd_opt(2026, 6, 13).unwrap();
             store
                 .update_state(sub.uid, SubscriptionStatus::Notified, 0, 2, date)
