@@ -156,7 +156,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     use super::*;
-    use crate::chart::{DISPLAY_TIMEZONE, HourlyPoint};
+    use crate::{LOCAL_TIMEZONE, chart::HourlyPoint};
 
     mod monotone_tangents {
         use super::*;
@@ -223,7 +223,7 @@ mod tests {
                 x: Utc
                     .timestamp_opt(ts, 0)
                     .unwrap()
-                    .with_timezone(&DISPLAY_TIMEZONE),
+                    .with_timezone(&LOCAL_TIMEZONE),
                 min: avg - 0.5,
                 max: avg + 0.5,
                 avg,

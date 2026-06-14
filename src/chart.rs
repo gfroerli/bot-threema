@@ -21,13 +21,6 @@ mod style;
 pub use interpolation::LinearInterpolate;
 pub use render::render_sensor_charts;
 
-/// The timezone used for all displayed timestamps.
-///
-/// All incoming data is assumed to originate as UTC and is converted into
-/// this zone before being passed to the chart renderer so that axis labels
-/// and tick positions land on local hour/day boundaries.
-pub const DISPLAY_TIMEZONE: Tz = Tz::Europe__Zurich;
-
 /// A single measurement point for a chart, generic over the x-axis type.
 #[derive(Debug, Clone, Copy)]
 pub struct ChartPoint<X> {
@@ -38,11 +31,11 @@ pub struct ChartPoint<X> {
 }
 
 /// Hourly measurement point keyed by a localized datetime in
-/// [`DISPLAY_TIMEZONE`].
+/// [`crate::LOCAL_TIMEZONE`].
 pub type HourlyPoint = ChartPoint<DateTime<Tz>>;
 
 /// Daily measurement point keyed by a localized datetime in
-/// [`DISPLAY_TIMEZONE`] (conventionally noon local time). Uses `DateTime`
+/// [`crate::LOCAL_TIMEZONE`] (conventionally noon local time). Uses `DateTime`
 /// rather than `NaiveDate` so that the line renderer can sub-divide
 /// individual days during spline interpolation.
 pub type DailyPoint = ChartPoint<DateTime<Tz>>;
