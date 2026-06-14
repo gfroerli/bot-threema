@@ -129,19 +129,28 @@ where
 /// A daily temperature aggregate as returned by the Gfrörli API.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DailyTemperature {
+    /// Local calendar date the aggregate covers, in [`crate::LOCAL_TIMEZONE`].
     pub aggregation_date: NaiveDate,
+    /// Lowest daily temperature
     pub minimum_temperature: f64,
+    /// Highest daily temperature
     pub maximum_temperature: f64,
+    /// Average daily temperature
     pub average_temperature: f64,
 }
 
 /// An hourly temperature aggregate as returned by the Gfrörli API.
 #[derive(Debug, Clone, Deserialize)]
 pub struct HourlyTemperature {
+    /// Local calendar date the aggregate covers, in [`crate::LOCAL_TIMEZONE`].
     pub aggregation_date: NaiveDate,
+    /// Local hour `[0, 24)` the aggregate covers, in [`crate::LOCAL_TIMEZONE`].
     pub aggregation_hour: u8,
+    /// Lowest hourly temperature
     pub minimum_temperature: f64,
+    /// Highest hourly temperature
     pub maximum_temperature: f64,
+    /// Average hourly temperature
     pub average_temperature: f64,
 }
 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Write, sync::Arc};
 
 use async_trait::async_trait;
-use chrono::{TimeDelta, Utc};
+use chrono::{TimeDelta, TimeZone, Utc};
 use threema_gateway::ThreemaId;
 use threema_gateway_bot::{
     commands::{CommandStyle, Commands},
@@ -12,11 +12,12 @@ use threema_gateway_bot::{
 };
 
 use crate::{
+    LOCAL_TIMEZONE,
     api::{
         DailyTemperature, GfroerliClient, HourlyTemperature, Sensor, SensorId, Sponsor,
         format_sponsor_list_text,
     },
-    chart::{self, DISPLAY_TIMEZONE, DailyPoint, HourlyPoint},
+    chart::{self, DailyPoint, HourlyPoint},
     store::{AlertStatus, AlertStore, MAX_THRESHOLD, MIN_THRESHOLD},
 };
 
@@ -278,15 +279,18 @@ fn format_alerts_list(entries: &[AlertEntry]) -> String {
     out
 }
 
-/// Convert API daily aggregates into chart points, anchored at noon in the
-/// chart's display timezone.
+/// Convert API daily aggregates into chart points, anchored at noon local time.
+///
+/// The aggregates are already in [`LOCAL_TIMEZONE`] (see
+/// [`DailyTemperature::aggregation_date`](crate::api::DailyTemperature::aggregation_date)), so the
+/// point's timestamp is built directly in that zone rather than converted.
 fn daily_points(daily: &[DailyTemperature]) -> Vec<DailyPoint> {
     daily
         .iter()
         .filter_map(|d| {
-            let datetime = d.aggregation_date.and_hms_opt(12, 0, 0)?.and_utc();
+            let naive = d.aggregation_date.and_hms_opt(12, 0, 0)?;
             Some(DailyPoint {
-                x: datetime.with_timezone(&DISPLAY_TIMEZONE),
+                x: LOCAL_TIMEZONE.from_local_datetime(&naive).single()?,
                 min: d.minimum_temperature,
                 max: d.maximum_temperature,
                 avg: d.average_temperature,
@@ -295,20 +299,22 @@ fn daily_points(daily: &[DailyTemperature]) -> Vec<DailyPoint> {
         .collect()
 }
 
-/// Convert API hourly aggregates into chart points, keeping only those within
-/// the last 24 hours. Timestamps are converted to the chart's display
-/// timezone.
+/// Convert API hourly aggregates into chart points, keeping only those within the last 24 hours.
+///
+/// The aggregates are already in [`LOCAL_TIMEZONE`] (see
+/// [`HourlyTemperature::aggregation_hour`](crate::api::HourlyTemperature::aggregation_hour)), so the
+/// point's timestamp is built directly in that zone, and the 24-hour cutoff is taken in local time.
 fn hourly_points(hourly: &[HourlyTemperature]) -> Vec<HourlyPoint> {
-    let cutoff = Utc::now() - TimeDelta::hours(24);
+    let cutoff = Utc::now().with_timezone(&LOCAL_TIMEZONE) - TimeDelta::hours(24);
     let mut points: Vec<HourlyPoint> = hourly
         .iter()
         .filter_map(|h| {
-            let datetime = h
+            let naive = h
                 .aggregation_date
-                .and_hms_opt(u32::from(h.aggregation_hour), 0, 0)?
-                .and_utc();
-            (datetime >= cutoff).then(|| HourlyPoint {
-                x: datetime.with_timezone(&DISPLAY_TIMEZONE),
+                .and_hms_opt(u32::from(h.aggregation_hour), 0, 0)?;
+            let x = LOCAL_TIMEZONE.from_local_datetime(&naive).single()?;
+            (x >= cutoff).then_some(HourlyPoint {
+                x,
                 min: h.minimum_temperature,
                 max: h.maximum_temperature,
                 avg: h.average_temperature,
@@ -434,7 +440,7 @@ impl GfroerliHandler {
             )
         }));
         let text = format_stats_text(&sensor, stats_24h, stats_30d);
-        let rendered_at = Utc::now().with_timezone(&DISPLAY_TIMEZONE);
+        let rendered_at = Utc::now().with_timezone(&LOCAL_TIMEZONE);
         let png = chart::render_sensor_charts(
             &sensor.device_name,
             rendered_at,
