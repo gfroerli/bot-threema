@@ -15,6 +15,10 @@ use crate::{api::SensorId, db::Database};
 /// Columns of the `alerts` table, in the order [`Alert`] expects them.
 const ALERT_COLUMNS: &str = "uid, threema_id, sensor_id, threshold, status, warm_streak, cold_streak, last_eval_date, created_at";
 
+/// Columns of the `alert_notifications` table, in the order [`AlertNotification`] expects them.
+const ALERT_NOTIFICATION_COLUMNS: &str =
+    "uid, alert_uid, sensor_id, reason, swim_avg, threshold, sent_at";
+
 /// Smallest allowed alert threshold, in °C.
 ///
 /// The inclusive range [`MIN_THRESHOLD`, `MAX_THRESHOLD`] is enforced by the `threshold` `CHECK`
@@ -34,6 +38,18 @@ pub enum AlertStatus {
     Watching,
     /// Already notified; silent until it resets.
     Notified,
+}
+
+/// Why a notification was sent, recorded in the `alert_notifications` audit log.
+///
+/// Stored in the `reason` TEXT column as the snake_case variant name. Today there is a single
+/// reason; the enum exists so any future reason is an explicit, typed addition rather than a
+/// free-form string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(rename_all = "snake_case")]
+pub enum NotificationReason {
+    /// The sensor's afternoon average reached the alert threshold (`Watching` → `Notified`).
+    ThresholdReached,
 }
 
 /// A single alert row.
@@ -68,6 +84,35 @@ impl Alert {
     /// The creation time as a typed UTC instant.
     pub fn created_at_datetime(&self) -> DateTime<Utc> {
         DateTime::from_timestamp(self.created_at, 0).unwrap_or_default()
+    }
+}
+
+/// A single row of the `alert_notifications` audit log.
+///
+/// The recipient is intentionally absent: it is recoverable by joining [`alert_uid`](Self::alert_uid)
+/// to `alerts.threema_id` while the alert exists, and is dropped once the alert is deleted.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AlertNotification {
+    /// Surrogate primary key (aliases SQLite's rowid).
+    pub uid: i64,
+    /// Originating alert, or `None` once that alert has been deleted (`ON DELETE SET NULL`).
+    pub alert_uid: Option<i64>,
+    /// Gfrörli sensor the notification was about.
+    pub sensor_id: SensorId,
+    /// Why the notification was sent.
+    pub reason: NotificationReason,
+    /// The day's swim-window average that triggered the notification, in °C.
+    pub swim_avg: f64,
+    /// The alert threshold at send time, in °C.
+    pub threshold: f64,
+    /// Send time as unix epoch seconds.
+    pub sent_at: i64,
+}
+
+impl AlertNotification {
+    /// The send time as a typed UTC instant.
+    pub fn sent_at_datetime(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp(self.sent_at, 0).unwrap_or_default()
     }
 }
 
@@ -234,6 +279,48 @@ impl AlertStore {
         .context("updating alert state")?;
         Ok(())
     }
+
+    /// Append an audit-log entry recording that a notification was sent for `alert`.
+    ///
+    /// Call this only after the message was sent successfully: the log records messages
+    /// that actually went out, not attempts. The recipient is not stored, it stays
+    /// recoverable via the `alert_uid` reference until the alert is deleted.
+    pub async fn log_notification(
+        &self,
+        alert_uid: i64,
+        sensor_id: SensorId,
+        reason: NotificationReason,
+        swim_avg: f64,
+        threshold: f64,
+    ) -> Result<()> {
+        let sent_at = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO alert_notifications \
+             (alert_uid, sensor_id, reason, swim_avg, threshold, sent_at) \
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(alert_uid)
+        .bind(sensor_id)
+        .bind(reason)
+        .bind(swim_avg)
+        .bind(threshold)
+        .bind(sent_at)
+        .execute(&self.pool)
+        .await
+        .context("logging notification")?;
+        Ok(())
+    }
+
+    /// List every audit-log entry, newest first.
+    pub async fn list_notifications(&self) -> Result<Vec<AlertNotification>> {
+        let sql = format!(
+            "SELECT {ALERT_NOTIFICATION_COLUMNS} FROM alert_notifications ORDER BY uid DESC"
+        );
+        sqlx::query_as::<_, AlertNotification>(&sql)
+            .fetch_all(&self.pool)
+            .await
+            .context("listing notifications")
+    }
 }
 
 #[cfg(test)]
@@ -383,6 +470,60 @@ mod tests {
             assert_eq!(updated.warm_streak, 0);
             assert_eq!(updated.cold_streak, 2);
             assert_eq!(updated.last_eval_date, Some(date));
+        }
+    }
+
+    mod log_notification {
+        use super::*;
+
+        #[tokio::test]
+        async fn round_trips_all_fields() {
+            let store = memory_store().await;
+            let alert = store.add(tid("ABCD1234"), SensorId(7), 23.0).await.unwrap();
+            store
+                .log_notification(
+                    alert.uid,
+                    SensorId(7),
+                    NotificationReason::ThresholdReached,
+                    23.4,
+                    23.0,
+                )
+                .await
+                .unwrap();
+
+            let logged = store.list_notifications().await.unwrap();
+            assert_eq!(logged.len(), 1);
+            let entry = &logged[0];
+            assert_eq!(entry.alert_uid, Some(alert.uid));
+            assert_eq!(entry.sensor_id, SensorId(7));
+            assert_eq!(entry.reason, NotificationReason::ThresholdReached);
+            assert_eq!(entry.swim_avg, 23.4);
+            assert_eq!(entry.threshold, 23.0);
+        }
+
+        #[tokio::test]
+        async fn survives_alert_deletion_with_recipient_dropped() {
+            let store = memory_store().await;
+            let alert = store.add(tid("ABCD1234"), SensorId(7), 23.0).await.unwrap();
+            store
+                .log_notification(
+                    alert.uid,
+                    SensorId(7),
+                    NotificationReason::ThresholdReached,
+                    23.4,
+                    23.0,
+                )
+                .await
+                .unwrap();
+
+            // Deleting the alert drops the recipient but must leave the audit row, with its link
+            // to the (now gone) alert cleared.
+            assert!(store.remove(tid("ABCD1234"), SensorId(7)).await.unwrap());
+
+            let logged = store.list_notifications().await.unwrap();
+            assert_eq!(logged.len(), 1);
+            assert_eq!(logged[0].alert_uid, None);
+            assert_eq!(logged[0].sensor_id, SensorId(7));
         }
     }
 

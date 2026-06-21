@@ -17,7 +17,7 @@ use crate::{
     LOCAL_TIMEZONE,
     alert::{self, AlertState, Outcome},
     api::{GfroerliClient, SensorId},
-    store::{Alert, AlertStore},
+    store::{Alert, AlertStore, NotificationReason},
 };
 
 /// How often the scheduler wakes to check whether evaluation is due.
@@ -167,6 +167,13 @@ async fn process_alert(
                         "Alert {}: fired, notified {} that {sensor_name} reached {swim_avg:.1}°C (threshold {:.1}°C)",
                         alert.uid, alert.threema_id, alert.threshold
                     );
+                    record_notification(
+                        store,
+                        alert,
+                        NotificationReason::ThresholdReached,
+                        swim_avg,
+                    )
+                    .await;
                     persist(store, alert.uid, &transition.state, today).await;
                 }
                 Err(err) => warn!(
@@ -192,6 +199,31 @@ async fn process_alert(
             );
             persist(store, alert.uid, &transition.state, today).await;
         }
+    }
+}
+
+/// Append an audit-log entry for a sent notification, logging (but not propagating) a write
+/// failure.
+async fn record_notification(
+    store: &AlertStore,
+    alert: &Alert,
+    reason: NotificationReason,
+    swim_avg: f64,
+) {
+    if let Err(err) = store
+        .log_notification(
+            alert.uid,
+            alert.sensor_id,
+            reason,
+            swim_avg,
+            alert.threshold,
+        )
+        .await
+    {
+        warn!(
+            "Alert {}: failed to write audit log entry: {err:#}",
+            alert.uid
+        );
     }
 }
 
