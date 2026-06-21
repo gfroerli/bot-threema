@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: format_alerts_cleared(0)
+---
+You have no alerts to remove.

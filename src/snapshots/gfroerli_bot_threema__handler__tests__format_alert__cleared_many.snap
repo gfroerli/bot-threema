@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: format_alerts_cleared(3)
+---
+🔕 Removed all 3 of your alerts.

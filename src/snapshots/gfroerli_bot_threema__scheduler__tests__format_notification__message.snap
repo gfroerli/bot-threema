@@ -1,0 +1,9 @@
+---
+source: src/scheduler.rs
+expression: "format_notification(\"Aare\", 20.3, 20.0)"
+---
+🏊 *Aare* is warm enough for a swim! The afternoon water temperature reached *20.3°C* today, at or above your 20.0°C alert.
+
+Check the latest reading anytime with: /temp Aare
+
+Or view detailed statistics with: /stats Aare

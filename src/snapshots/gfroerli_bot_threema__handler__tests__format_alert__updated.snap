@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: "format_alert_updated(\"Aare\", 25.0)"
+---
+🔔 Updated your alert for *Aare* to *25.0°C*. I'll message you once the afternoon water temperature reaches it two days in a row.

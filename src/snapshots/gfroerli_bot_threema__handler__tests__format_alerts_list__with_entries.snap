@@ -1,0 +1,8 @@
+---
+source: src/handler.rs
+expression: format_alerts_list(&entries)
+---
+Your alerts:
+
+- *Aare* at 20.0°C (_watching_)
+- *Aare Bern* at 18.5°C (_already notified_)

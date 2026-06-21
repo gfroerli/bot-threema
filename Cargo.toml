@@ -14,11 +14,12 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 plotters = { version = "0.3", default-features = false, features = ["ab_glyph", "area_series", "bitmap_backend", "bitmap_encoder", "chrono", "line_series"] }
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "chrono"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 threema-gateway = "0.21"
-threema-gateway-bot = "0.2.0"
+threema-gateway-bot = "0.2.1"
 
 [dev-dependencies]
 insta = "1"

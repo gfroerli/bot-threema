@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: "format_no_alert_for(\"Aare\")"
+---
+You don't have an alert for *Aare*.

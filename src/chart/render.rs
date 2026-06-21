@@ -305,7 +305,7 @@ mod tests {
     use chrono::{TimeDelta, TimeZone};
 
     use super::*;
-    use crate::chart::DISPLAY_TIMEZONE;
+    use crate::LOCAL_TIMEZONE;
 
     mod y_range {
         use super::*;
@@ -335,13 +335,13 @@ mod tests {
         use super::*;
 
         fn sample_rendered_at() -> DateTime<Tz> {
-            DISPLAY_TIMEZONE
+            LOCAL_TIMEZONE
                 .with_ymd_and_hms(2025, 7, 15, 14, 30, 0)
                 .unwrap()
         }
 
         fn sample_hourly() -> Vec<HourlyPoint> {
-            let base = DISPLAY_TIMEZONE
+            let base = LOCAL_TIMEZONE
                 .with_ymd_and_hms(2025, 7, 15, 0, 0, 0)
                 .unwrap();
             (0..24)
@@ -358,7 +358,7 @@ mod tests {
         }
 
         fn sample_daily() -> Vec<DailyPoint> {
-            let base = DISPLAY_TIMEZONE
+            let base = LOCAL_TIMEZONE
                 .with_ymd_and_hms(2025, 6, 15, 12, 0, 0)
                 .unwrap();
             (0..30)
@@ -399,7 +399,7 @@ mod tests {
 
         #[test]
         fn handles_single_point() {
-            let base = DISPLAY_TIMEZONE
+            let base = LOCAL_TIMEZONE
                 .with_ymd_and_hms(2025, 7, 15, 12, 0, 0)
                 .unwrap();
             let hourly = vec![HourlyPoint {

@@ -2,3 +2,6 @@
 .claude
 vendor/
 config.toml
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

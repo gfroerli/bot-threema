@@ -1,0 +1,5 @@
+---
+source: src/handler.rs
+expression: format_alert_limit_reached()
+---
+You already have the maximum of 10 alerts. Remove one with /unalert <sensor> before adding another.
