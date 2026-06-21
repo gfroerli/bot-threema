@@ -3243,8 +3243,9 @@ dependencies = [
 
 [[package]]
 name = "threema-gateway-bot"
-version = "0.2.0"
-source = "git+https://github.com/threema-ch/threema-bot-sdk/?branch=5-dynamic-help-text#ddead817199a7206bed3828defd60d83af1219d9"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7f5bca65bda1e6b80c8c85d5accb7907b5f67ea455a7694a74310c62a83169b"
 dependencies = [
  "async-trait",
  "axum",

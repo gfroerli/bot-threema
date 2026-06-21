@@ -19,6 +19,23 @@ Creating an alert stores your Threema ID so the bot can message you; removing th
 <query>`, or `/unalert all`) deletes it again. Alerts are persisted in a SQLite database (see the
 `[database]` section in `config.toml`).
 
+## Alerts
+
+`/alert <sensor> <temperature>` notifies you once a sensor's water is reliably warm enough for
+swimming. To avoid spurious alerts from the daily temperature swing, the bot judges each day by the
+**afternoon average** (the mean over 12:00–18:00 local) rather than a momentary reading, and applies
+some hysteresis:
+
+- Each evening (around 19:00 Europe/Zurich, once the afternoon window has closed) every alert is
+  evaluated once.
+- You're notified when the afternoon average is at or above your threshold on **two days in a row**.
+- After notifying, the alert goes quiet. It resets only once the afternoon average stays clearly
+  below your threshold for **three days in a row**, so a cold snap followed by a warm spell will
+  alert you again.
+
+You can hold one alert per sensor; sending `/alert` again for the same sensor with a different
+temperature updates the threshold (and restarts the evaluation).
+
 ## Configuration
 
 Copy `config.toml.example` to `config.toml` and fill in the values. All config values can also be

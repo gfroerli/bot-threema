@@ -82,7 +82,7 @@ pub struct Transition {
 
 /// How a single day's swim-window average classifies relative to the threshold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DayClass {
+pub enum DayClass {
     /// No swim-window average available (missing / insufficient data).
     NoData,
     /// At or above the threshold: counts toward notifying.
@@ -99,7 +99,7 @@ fn round1(value: f64) -> f64 {
 }
 
 /// Classify a day's swim-window average relative to the threshold (at display precision).
-fn classify(swim_avg: Option<f64>, threshold: f64) -> DayClass {
+pub fn classify(swim_avg: Option<f64>, threshold: f64) -> DayClass {
     match swim_avg {
         None => DayClass::NoData,
         Some(avg) => {

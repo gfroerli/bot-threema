@@ -6,6 +6,7 @@ pub mod chart;
 pub mod config;
 pub mod db;
 pub mod handler;
+pub mod scheduler;
 pub mod store;
 
 /// Timezone all sensor data and user-facing times are expressed in.

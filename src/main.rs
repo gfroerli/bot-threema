@@ -2,7 +2,7 @@ use std::{env, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use gfroerli_bot_threema::{
-    api::GfroerliClient, config::AppConfig, db::Database, handler::GfroerliHandler,
+    api::GfroerliClient, config::AppConfig, db::Database, handler::GfroerliHandler, scheduler,
     store::AlertStore,
 };
 use threema_gateway_bot::server::BotServer;
@@ -25,10 +25,9 @@ fn parse_args() -> Result<Option<PathBuf>> {
 async fn main() -> Result<()> {
     // Set up logging
     fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,threema_gateway_bot=debug")),
-        )
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new("info,gfroerli_bot_threema=debug,threema_gateway_bot=debug")
+        }))
         .init();
 
     // Load config
@@ -53,10 +52,16 @@ async fn main() -> Result<()> {
         .validate_api_key()
         .await
         .context("Gfrörli API key validation failed")?;
-    let handler = GfroerliHandler::new(client, store, bot_settings.maintainer_ids);
+    let handler = GfroerliHandler::new(client.clone(), store.clone(), bot_settings.maintainer_ids);
+
+    // Build the server instance
+    let server = BotServer::new(bot_config, handler)?;
+
+    // Spawn scheduler background task
+    tokio::spawn(scheduler::run(store, client, server.client()));
 
     // Run bot server
-    BotServer::new(bot_config, handler)?.run().await?;
+    server.run().await?;
 
     Ok(())
 }
