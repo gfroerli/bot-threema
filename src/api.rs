@@ -251,6 +251,14 @@ fn temperature_emoji(temp: Option<f64>) -> &'static str {
 }
 
 impl Sensor {
+    /// Whether this sensor has ever reported a measurement.
+    ///
+    /// True only if both a latest temperature and a measurement timestamp are
+    /// present; sensors that have never measured anything are missing both.
+    pub fn has_measurement(&self) -> bool {
+        self.latest_temperature.is_some() && self.latest_measurement_at.is_some()
+    }
+
     /// Format sensor as a line in the sensor list.
     pub fn format_list_entry(&self) -> String {
         let name = &self.device_name;
@@ -363,7 +371,7 @@ impl GfroerliClient {
         debug!("Fetching sensors from API");
         let url = format!("{}/api/mobile_app/sensors", self.config.api_url);
         let start = Instant::now();
-        let sensors: Vec<Sensor> = self
+        let mut sensors: Vec<Sensor> = self
             .http
             .get(&url)
             .bearer_auth(&self.config.api_key)
@@ -373,6 +381,9 @@ impl GfroerliClient {
             .json()
             .await?;
         log_request_duration("GET /api/mobile_app/sensors", start.elapsed());
+
+        // Drop sensors that have never reported a measurement.
+        sensors.retain(Sensor::has_measurement);
 
         // Update cache
         {
@@ -575,6 +586,34 @@ mod tests {
         fn without_temperature() {
             let sensor = make_sensor(42, "Aare Bern", None, None);
             assert_eq!(sensor.format_list_entry(), "Aare Bern (#42)");
+        }
+    }
+
+    mod has_measurement {
+        use super::*;
+
+        #[test]
+        fn with_temp_and_time() {
+            let sensor = make_sensor(1, "Aare Bern", Some(18.3), Some(Utc::now()));
+            assert!(sensor.has_measurement());
+        }
+
+        #[test]
+        fn never_measured() {
+            let sensor = make_sensor(1, "Aare Bern", None, None);
+            assert!(!sensor.has_measurement());
+        }
+
+        #[test]
+        fn temp_without_time() {
+            let sensor = make_sensor(1, "Aare Bern", Some(18.3), None);
+            assert!(!sensor.has_measurement());
+        }
+
+        #[test]
+        fn time_without_temp() {
+            let sensor = make_sensor(1, "Aare Bern", None, Some(Utc::now()));
+            assert!(!sensor.has_measurement());
         }
     }
 
