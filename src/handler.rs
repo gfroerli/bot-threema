@@ -712,8 +712,10 @@ fn format_about_text(maintainer_ids: &[ThreemaId]) -> String {
         "Gfrörli is a community project that measures water temperatures in Swiss water bodies.\n\n\
          Website: https://gfrör.li/\n\n\
          This bot allows you to quickly check current water temperatures directly from your phone. \
-         Use /sensors to see all available measurement stations, or /temp to get the latest reading \
-         for a specific sensor.",
+         Use */sensors* to see all available measurement stations, or */temp* to get the latest reading \
+         for a specific sensor.\n\n\
+         You can also download our mobile apps to view sensor details on the go: On iOS, download it from \
+         the App Store, on Android, download it from Google Play or Accrescent.",
     );
     if !maintainer_ids.is_empty() {
         let links = maintainer_ids

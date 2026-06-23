@@ -6,6 +6,8 @@ Gfrörli is a community project that measures water temperatures in Swiss water 
 
 Website: https://gfrör.li/
 
-This bot allows you to quickly check current water temperatures directly from your phone. Use /sensors to see all available measurement stations, or /temp to get the latest reading for a specific sensor.
+This bot allows you to quickly check current water temperatures directly from your phone. Use */sensors* to see all available measurement stations, or */temp* to get the latest reading for a specific sensor.
+
+You can also download our mobile apps to view sensor details on the go: On iOS, download it from the App Store, on Android, download it from Google Play or Accrescent.
 
 If you have any question about this bot, please feel free to contact https://threema.id/AAAABBBB or https://threema.id/CCCCDDDD or https://threema.id/EEEEFFFF
