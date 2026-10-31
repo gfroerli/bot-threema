@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate, Utc};
-use sqlx::SqlitePool;
+use sqlx::{AssertSqlSafe, SqlitePool};
 use threema_gateway::ThreemaId;
 
 use crate::{api::SensorId, db::Database};
@@ -218,7 +218,8 @@ impl AlertStore {
     pub async fn get(&self, threema_id: ThreemaId, sensor_id: SensorId) -> Result<Option<Alert>> {
         let sql =
             format!("SELECT {ALERT_COLUMNS} FROM alerts WHERE threema_id = ? AND sensor_id = ?");
-        sqlx::query_as::<_, Alert>(&sql)
+        // SAFETY: SQL is built only from the ALERT_COLUMNS const, user values are bound
+        sqlx::query_as::<_, Alert>(AssertSqlSafe(sql))
             .bind(threema_id.as_str())
             .bind(sensor_id)
             .fetch_optional(&self.pool)
@@ -230,7 +231,8 @@ impl AlertStore {
     pub async fn list_for_user(&self, threema_id: ThreemaId) -> Result<Vec<Alert>> {
         let sql =
             format!("SELECT {ALERT_COLUMNS} FROM alerts WHERE threema_id = ? ORDER BY sensor_id");
-        sqlx::query_as::<_, Alert>(&sql)
+        // SAFETY: SQL is built only from the ALERT_COLUMNS const, user values are bound
+        sqlx::query_as::<_, Alert>(AssertSqlSafe(sql))
             .bind(threema_id.as_str())
             .fetch_all(&self.pool)
             .await
@@ -240,7 +242,8 @@ impl AlertStore {
     /// List every alert, ordered by `uid` — used by the daily evaluation sweep.
     pub async fn list_active(&self) -> Result<Vec<Alert>> {
         let sql = format!("SELECT {ALERT_COLUMNS} FROM alerts ORDER BY uid");
-        sqlx::query_as::<_, Alert>(&sql)
+        // SAFETY: SQL is built only from the ALERT_COLUMNS const, no runtime data
+        sqlx::query_as::<_, Alert>(AssertSqlSafe(sql))
             .fetch_all(&self.pool)
             .await
             .context("listing all alerts")
@@ -316,7 +319,8 @@ impl AlertStore {
         let sql = format!(
             "SELECT {ALERT_NOTIFICATION_COLUMNS} FROM alert_notifications ORDER BY uid DESC"
         );
-        sqlx::query_as::<_, AlertNotification>(&sql)
+        // SAFETY: SQL is built only from the ALERT_NOTIFICATION_COLUMNS const, no runtime data
+        sqlx::query_as::<_, AlertNotification>(AssertSqlSafe(sql))
             .fetch_all(&self.pool)
             .await
             .context("listing notifications")
